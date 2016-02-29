@@ -4,37 +4,39 @@ subject = {'Murphy','Spemann','Morgan','Whipple'};
 % subject = {'Whipple'};
 expRefs = dat.listExps(subject)';
 expRefs = vertcat(expRefs{:});
+% 
+% expRefs = {
+%     '2016-02-15_1_Whipple';
+% '2016-02-16_1_Whipple';
+% '2016-02-17_1_Whipple';
+% '2016-02-19_1_Whipple';
+% % '2016-02-22_1_Whipple';
+% '2016-02-23_2_Whipple';
+% '2016-02-24_1_Whipple';
+% '2016-02-25_1_Whipple';
+% '2016-02-15_2_Morgan';
+% '2016-02-18_1_Morgan';
+% '2016-02-23_1_Morgan';
+% '2016-02-24_1_Morgan';
+% '2016-02-16_1_Spemann';
+% '2016-02-17_1_Spemann';
+% '2016-02-18_1_Spemann';
+% '2016-02-19_1_Spemann';
+% % '2016-02-22_2_Spemann';
+% '2016-02-23_2_Spemann';
+% '2016-02-24_1_Spemann';
+% '2016-02-25_1_Spemann';
+% '2016-02-24_1_Murphy';
+% '2016-02-25_1_Murphy';
+% '2016-02-25_2_Murphy'
+% 
+% };
+%        
 
-expRefs = {
-    '2016-02-15_1_Whipple';
-'2016-02-16_1_Whipple';
-'2016-02-17_1_Whipple';
-'2016-02-19_1_Whipple';
-'2016-02-22_1_Whipple';
-'2016-02-23_2_Whipple';
-'2016-02-24_1_Whipple';
-'2016-02-25_1_Whipple';
-'2016-02-15_2_Morgan';
-'2016-02-18_1_Morgan';
-'2016-02-23_1_Morgan';
-'2016-02-24_1_Morgan';
-'2016-02-16_1_Spemann';
-'2016-02-17_1_Spemann';
-'2016-02-18_1_Spemann';
-'2016-02-19_1_Spemann';
-'2016-02-22_2_Spemann';
-'2016-02-23_2_Spemann';
-'2016-02-24_1_Spemann';
-'2016-02-25_1_Spemann';
-'2016-02-24_1_Murphy';
-'2016-02-25_1_Murphy';
-'2016-02-25_2_Murphy'
-
-};
-       
 %Combine all sessions
 D=struct;
 i=1;
+figure;
 for s = 1:length(expRefs)
     disp([num2str(s) '/' num2str(length(expRefs))]);
     try
@@ -43,6 +45,20 @@ for s = 1:length(expRefs)
         if length(d.response) < 100
             error('not enough trials');
         end
+        
+        e = getrow(d,d.laserIdx==0);
+        g=GLM(e).setModel('C50-subset').fit;
+%         g.plotFit; drawnow;
+        c50sub.n(i) = g.parameterFits(5);
+        c50sub.c50(i) = g.parameterFits(6);
+        subplot(7,7,i); g.plotFit;drawnow;
+        title(gca,'');
+        xlabel(gca,'');
+        ylabel(gca,'');
+        
+        g=GLM(e).setModel('C^N-subset').fit;
+        nsub.n(i) = g.parameterFits(5);
+        
 %         d.sessionID = ones(length(d.response),1)*s;
         d.sessionID = ones(length(d.response),1)*i;
         i=i+1;
@@ -54,9 +70,12 @@ for s = 1:length(expRefs)
 end
 expRefs(cellfun(@isempty,expRefs))=[];
 
+figure; subplot(1,2,1); hist(c50sub.n); xlabel('n');
+subplot(1,2,2); hist(c50sub.c50); xlabel('c50');
 D = rmfield(D,'laserIdx');
 % D = getrow(D,D.repeatNum==1);
 l = laserGLM(D);
+% save('C:\Users\Peter\Desktop\scripts\LaserOmnibus_data.mat', 'l');
 
 %% Define and fit model 
 numSessions = max(l.data.sessionID);
@@ -73,15 +92,17 @@ Y = l.data.response;
 
 % X = zeros(numTrials,3*numSessions + 3*numSites);
 X = sparse(numTrials,3*numSessions + 3*numSites);
-N = 0.4;
-cfn = @(c)(c.^N);
 
+% N = 0.4;
+% cfn = @(c)(c.^N);
 % c50=1;
 % N=1;
 % cfn = @(c)((c.^N)/(c.^N + c50^N));
+contrast_rep_fcn = @(c,n,c50)((c.^n)/(c.^n + c50^n));
 for i = 1:numTrials
 
     thisSession = l.data.sessionID(i);
+    cfn = @(c)contrast_rep_fcn(c,c50sub.n(thisSession),c50sub.c50(thisSession));
     X(i,3*thisSession - 2) = 1;
     X(i,3*thisSession - 1) = cfn(l.data.contrast_cond(i,1));
     X(i,3*thisSession - 0) = cfn(l.data.contrast_cond(i,2));
@@ -97,7 +118,8 @@ end
 
 opts=struct;
 opts.intr=0; %don't add a global intercept
-opts.alpha=1; %L1 regularisation
+opts.alpha=1; %lasso regularisation
+% opts.alpha=0;
 
 % penalty = ones(1,size(X,2)); penalty(1:3:end)=0;
 % opts.penalty_factor=penalty; %Try penalising only the contrast terms
@@ -137,6 +159,11 @@ subplot(3,1,3); bar(sitesP_CRight); title('CR scaling for each site');
 %Plot the map of these site by site parameter values
 
 %% nice plot: overlay onto kirkcaldie brain
+sitesP = b(3*numSessions+1:end,:);
+sitesP_Biases = sitesP(1:3:end,:);
+sitesP_CLeft = sitesP(2:3:end,:);
+sitesP_CRight = sitesP(3:3:end,:);
+
 toDisplay = {sitesP_Biases,sitesP_CLeft,sitesP_CRight};%, sitesP_CLeft, sitesP_CRight};
 labels = {'bias','left contrast sensitivity','right contrast sensitivity'};
 % toDisplay = {sitesP_CRight};
