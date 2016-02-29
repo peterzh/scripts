@@ -41,7 +41,7 @@ for s = 1:length(expRefs)
     disp([num2str(s) '/' num2str(length(expRefs))]);
     try
         d = laserGLM(expRefs{s}).data;
-        d = structfun(@(x)(x(6:end,:)),d,'uni',0); %trim first 5 trials
+        d = structfun(@(x)(x(6:(end-14),:)),d,'uni',0); %trim first 5 trials and last 15
         if length(d.response) < 100
             error('not enough trials');
         end
@@ -85,12 +85,6 @@ numTrials = size(l.data.response,1);
 Y = l.data.response;
 
 %construct design matrix X (for loop for ease of understanding not speed!)
-% XsessionOffsets = zeros(numTrials,numSessions);
-% XsessionContrasts = zeros(numTrials,numSessions);
-% XsiteOffsets = zeros(numTrials,numSites);
-% XsiteContrasts = zeros(numTrials,numSites);
-
-% X = zeros(numTrials,3*numSessions + 3*numSites);
 X = sparse(numTrials,3*numSessions + 3*numSites);
 
 % N = 0.4;
@@ -219,3 +213,37 @@ scatter(l.inactivationSite(:,2),l.inactivationSite(:,1),dotSize,tab,dotShape,'fi
 axis([-5 5 -4 3]);
 % set(s,'markeredgecolor',[0.8 0.8 0.8]);
 title('Number of trials at each site');
+
+%% Split-half reliability
+numTrials = length(Y);
+idx = randperm(numTrials);
+halfIdx = round(numTrials/2);
+idx = {idx(1:halfIdx),idx((1+halfIdx):end)};
+
+for split = 1:length(idx)
+    Ys = Y(idx{split});
+    Xs = X(idx{split},:);
+    fit=cvglmnet(X,Y,'multinomial',glmnetSet(opts));
+    b=cvglmnetCoef(fit);
+    b=[b{1}-b{3} b{2}-b{3}];
+    b(1,:) = [];
+    
+    sitesP = b(3*numSessions+1:end,:);
+    sitesP_Biases(:,:,split) = sitesP(1:3:end,:);
+    sitesP_CLeft(:,:,split) = sitesP(2:3:end,:);
+    sitesP_CRight(:,:,split) = sitesP(3:3:end,:);
+end
+
+figure;
+h(1)=subplot(3,1,1);
+Diff = sitesP_Biases(:,:,1)-sitesP_Biases(:,:,2);
+hist(Diff); title('difference in biases for all sites');
+h(2)=subplot(3,1,2);
+Diff = sitesP_CLeft(:,:,1)-sitesP_CLeft(:,:,2);
+hist(Diff); title('difference in left contrast sens for all sites');
+h(3)=subplot(3,1,3);
+Diff = sitesP_CRight(:,:,1)-sitesP_CRight(:,:,2);
+hist(Diff); title('difference in right contrast sens for all sites');
+% linkaxes(h,'x');
+
+
