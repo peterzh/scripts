@@ -216,13 +216,11 @@ title('Number of trials at each site');
 
 %% Split-half reliability
 numTrials = length(Y);
-idx = randperm(numTrials);
-halfIdx = round(numTrials/2);
-idx = {idx(1:halfIdx),idx((1+halfIdx):end)};
+C = cvpartition(numTrials,'KFold',3);
 
-for split = 1:length(idx)
-    Ys = Y(idx{split});
-    Xs = X(idx{split},:);
+for split = 1:length(C.TrainSize)
+    Ys = Y(C.training(split));
+    Xs = X(C.training(split),:);
     fit=cvglmnet(X,Y,'multinomial',glmnetSet(opts));
     b=cvglmnetCoef(fit);
     b=[b{1}-b{3} b{2}-b{3}];
@@ -236,14 +234,13 @@ end
 
 figure;
 h(1)=subplot(3,1,1);
-Diff = sitesP_Biases(:,:,1)-sitesP_Biases(:,:,2);
-hist(Diff); title('difference in biases for all sites');
+Diff = std(sitesP_Biases,[],3);
+hist(Diff); title('std in biases for all sites');
 h(2)=subplot(3,1,2);
-Diff = sitesP_CLeft(:,:,1)-sitesP_CLeft(:,:,2);
-hist(Diff); title('difference in left contrast sens for all sites');
+Diff = std(sitesP_CLeft,[],3);
+hist(Diff); title('std in left contrast sens for all sites');
 h(3)=subplot(3,1,3);
-Diff = sitesP_CRight(:,:,1)-sitesP_CRight(:,:,2);
-hist(Diff); title('difference in right contrast sens for all sites');
+Diff = std(sitesP_CRight,[],3);
+hist(Diff); title('std in right contrast sens for all sites');
 % linkaxes(h,'x');
-
 
