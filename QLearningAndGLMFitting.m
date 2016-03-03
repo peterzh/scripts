@@ -37,7 +37,12 @@ expRefs = {
 '2015-01-26_3_SS031_DA'
 };
 
-q = Q(expRefs).fit;
+% q = Q(expRefs).fit;
 
-%% try with one session
-q = Q(expRefs([2,1])).fit;
+fig_dir = 'B:\figures\GLM+Qlearning'; 
+for b = 1:length(expRefs)
+    q=Q(expRefs(b)).fit;
+%     print(fullfile(fig_dir,[expRefs{b} '.pdf' ]),'-dpdf','-painters');
+    savefig(fullfile(fig_dir,[expRefs{b} '.fig' ]));
+    close all;
+end
