@@ -1,80 +1,24 @@
-%% %%%%%%%%%%%%%  FOR PAPER: create publishable plot showing how the model can capture laser effects
+%% %% %%%%%%%%%%%%%  FOR PAPER: create summary plot for each session
+
 % Do it by splitting the data into laser and nolaser and fitting
 
 figDir = 'B:\figures\GLM+Laser';
 MODEL = 'C50-subset';
 
+% >> PRELOAD expRefs from LaserIdentifySessions script <<
+subjects = {'Hopkins'};
+figLabel = 'LeftVisual';
 
-% %Eijkman Left V1
-% expRefs = {'2015-09-28_1_Eijkman',1;
-%            '2015-10-02_1_Eijkman',1;
-%            '2015-10-07_1_Eijkman',1;
-%            '2015-10-08_1_Eijkman',1;
-%            '2015-10-10_1_Eijkman',1;
-%            '2015-10-23_1_Eijkman',1;
-%            '2015-10-23_1_Eijkman',2;
-%            '2015-11-18_1_Eijkman',1; %many contrast levels
-%            '2015-11-19_1_Eijkman',1}; %many contrast levels
-% figLabel = 'LeftV1';
+expRefs = LaserIdentifySessions(subjects,figLabel);
 
-% 
-% %Eijkman Right V1
-% expRefs = {'2015-09-30_1_Eijkman',1;
-%            '2015-10-04_1_Eijkman',1;
-%            '2015-10-15_1_Eijkman',1;
-%            '2015-10-23_1_Eijkman',3};
-% figLabel = 'RightV1';
-% % % 
-% % % 
-% % %Hopkins Left V1
-% expRefs = {'2015-09-16_1_Hopkins',1;
-%            '2015-10-03_1_Hopkins',1;
-%            '2015-10-06_1_Hopkins',1;
-%            '2015-10-07_1_Hopkins',1;
-% %            '2015-10-08_1_Hopkins',1;
-%            '2015-10-08_1_Hopkins',2;
-%            '2015-10-14_1_Hopkins',2
-%            '2015-10-22_1_Hopkins',1
-%            '2015-10-30_1_Hopkins',1};
-% % figLabel = 'LeftV1';
-% % % 
-% % %Hopkins Right V1
-expRefs = {'2015-09-17_1_Hopkins',1;
-           '2015-09-22_2_Hopkins',1;
-           '2015-10-05_1_Hopkins',1;
-           '2015-10-09_1_Hopkins',1;
-           '2015-10-14_1_Hopkins',1;
-%            '2015-10-16_1_Hopkins',1;
-           '2015-10-19_4_Hopkins',1;
-           '2015-10-20_2_Hopkins',2;
-           '2015-10-20_2_Hopkins',3};
-figLabel = 'RightV1';
-
-% expRefs = {'2015-09-16_1_Hopkins',1;
-%            '2015-10-03_1_Hopkins',1;
-%            '2015-10-06_1_Hopkins',1;
-%            '2015-10-07_1_Hopkins',1;
-%            '2015-10-08_1_Hopkins',1;
-%            '2015-10-08_1_Hopkins',2;
-%            '2015-10-14_1_Hopkins',2;
-%            '2015-10-22_1_Hopkins',1};
-% %            '2015-10-30_1_Hopkins',1};
-% figLabel = 'LeftV1';
+grp_cols =      [ 0    0.4470    0.7410;
+    0.8500    0.3250    0.0980;
+    0.4940    0.1840    0.5560;
+    0.4660    0.6740    0.1880;
+    0.3010    0.7450    0.9330;
+    0.6350    0.0780    0.1840];
 
 
-    grp_cols =      [ 0    0.4470    0.7410;
-        0.8500    0.3250    0.0980;
-        0.4940    0.1840    0.5560;
-        0.4660    0.6740    0.1880;
-        0.3010    0.7450    0.9330;
-        0.6350    0.0780    0.1840];
-
-% %Hopkins left barrel
-% expRefs = {'2015-10-01_1_Hopkins' ,2;
-% '2015-10-02_1_Hopkins' ,2;
-% '2015-10-13_1_Hopkins' ,3;
-% '2015-10-22_1_Hopkins' ,2};
-% figLabel = 'LeftBarrel';
 
 P_Laser = nan(size(expRefs,1),6);
 P_noLaser = nan(size(expRefs,1),6);
@@ -248,31 +192,9 @@ for b=1:size(expRefs,1)
     print(fullfile(figDir,[expRef '_' figLabel '_' num2str(laserID) '.pdf' ]),'-dpdf','-painters');
 end
 
-% numP = size(BIAS_noLaser,1);
-
-% subplot(1,2,1);
-% plot([BIAS_noLaser, SCALE_noLaser],[BIAS_Laser, SCALE_Laser],'.','MarkerSize',20);
-% hold on; 
-% legend('Bias ZL','Bias ZR','Sens ZL','Sens ZR');
-% ezplot(gca,'y=x'); 
-% hold off;
-% xlabel('Param noLaser');
-% ylabel('Param Laser');
-% axis(gca,'equal','auto');
-% title(figLabel);
-
-% plot(P_noLaser,P_Laser,'.','MarkerSize',20);
-% hold on;
-% legend(g.parameterLabels);
-% ezplot(gca,'y=x'); 
-% hold off;
-% xlabel('Param noLaser');
-% ylabel('Param Laser');
-% axis(gca,'equal','auto');
-% title(figLabel);
 
 
-%% %%%%%%%%%%%%%  FOR PAPER: create summary plot
+%% %%%%%%%%%%%%%  FOR PAPER: create summary plot combining sessions
 % Do it by splitting the data into laser and nolaser and fitting
     grp_cols =      [ 0    0.4470    0.7410;
         0.8500    0.3250    0.0980;
@@ -284,10 +206,10 @@ end
 figDir = 'B:\figures\GLM+Laser';
 MODEL = 'C50-subset';
 
-expRefs = {'2015-10-03_1_Hopkins', 3;
-'2015-10-13_1_Hopkins', 2;
-'2015-10-22_1_Hopkins', 3;}
-figLabel = 'RightBarrel';
+subjects = {'Eijkman','Hopkins'};%,'Eijkman','Morgan','Whipple','Murphy','Spemann'};
+figLabel = 'LeftBarrel';
+expRefs = LaserIdentifySessions(subjects,figLabel);
+% << Preload expRefs first
 
 D=struct;
 for b=1:size(expRefs,1)
@@ -301,7 +223,6 @@ end
 D.laserIdx(D.laserIdx>1) = 1;
 
 g = GLM(D);
-% g.regularise = @(b)(sum(b.^2)*0);
 g = g.setModel(MODEL);
 
 % NO LASER CALCULATIONS
