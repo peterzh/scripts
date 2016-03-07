@@ -42,6 +42,7 @@ expRefs = {
 fig_dir = 'B:\figures\GLM+Qlearning'; 
 for b = 1:length(expRefs)
     q=Q(expRefs(b)).fit;
+    set(gcf, 'Position', get(0,'Screensize'));
 %     print(fullfile(fig_dir,[expRefs{b} '.pdf' ]),'-dpdf','-painters');
     savefig(fullfile(fig_dir,[expRefs{b} '.fig' ]));
     close all;
