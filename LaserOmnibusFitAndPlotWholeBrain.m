@@ -248,17 +248,18 @@ hist(Diff); title('std in right contrast sens for all sites');
 noLaser_responses = l.data.response(l.data.laserIdx==0 & diff(l.data.contrast_cond,[],2)==0);
 noLaser_p = arrayfun(@(r)(sum(noLaser_responses==r)/length(noLaser_responses)),1:3);
 
-for site = 1:size(l.inactivationSite)
+Laser_p=[];
+for site = 1:size(l.inactivationSite,1)
     Laser_responses = l.data.response(l.data.laserIdx==site & diff(l.data.contrast_cond,[],2)==0);
     Laser_p(site,:) = arrayfun(@(r)(sum(Laser_responses==r)/length(Laser_responses)),1:3);
 end
 
 pDiff = bsxfun(@minus,Laser_p,noLaser_p);
 figure;
-titles = {'%Left laser - %Left noLaser','%Reft laser - %Reft noLaser','%NG laser - %NG noLaser'};
+titles = {'pL_{laser} - pL_{noLaser}','pR_{laser} - pR_{noLaser}','pNG_{laser} - pNG_{noLaser}'};
 for lr=1:3
     subplot(1,3,lr);
-    scatter(l.inactivationSite(:,2),l.inactivationSite(:,1),400,pDiff(:,lr),'s','filled'); axis equal; colorbar;
+    scatter(l.inactivationSite(:,2),l.inactivationSite(:,1),300,pDiff(:,lr),'o','filled'); axis equal; colorbar;
     ylim([-6 4]);
     xlim([-4 4]);
     caxis([-1 1]*max(abs(pDiff(:))));
