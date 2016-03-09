@@ -123,12 +123,18 @@ b=cvglmnetCoef(fit);
 b=[b{1}-b{3} b{2}-b{3}];
 b(1,:) = [];
 
-%% Plot model parameters over sessions and sites
 % Organise parameter estimate values
 sessionP = b(1:3*numSessions,:);
 sessionP_Biases = sessionP(1:3:end,:);
 sessionP_CLeft = sessionP(2:3:end,:);
 sessionP_CRight = sessionP(3:3:end,:);
+
+sitesP = b(3*numSessions+1:end,:);
+sitesP_Biases = sitesP(1:3:end,:);
+sitesP_CLeft = sitesP(2:3:end,:);
+sitesP_CRight = sitesP(3:3:end,:);
+
+%% Plot model parameters over sessions and sites
 
 %Plot the session by session values of the parameters to see whether they
 %change much
@@ -138,11 +144,6 @@ subplot(3,1,2); bar(sessionP_CLeft); title('CL scaling for each session');
 subplot(3,1,3); bar(sessionP_CRight); title('CR scaling for each session');
 set(gca,'XTick',1:length(expRefs),'XTickLabel',expRefs,'XTickLabelRotation',90);
 
-sitesP = b(3*numSessions+1:end,:);
-sitesP_Biases = sitesP(1:3:end,:);
-sitesP_CLeft = sitesP(2:3:end,:);
-sitesP_CRight = sitesP(3:3:end,:);
-
 %Plot the site by site values of the parameters to see whether they
 %change much
 figure;
@@ -150,14 +151,7 @@ subplot(3,1,1); bar(sitesP_Biases); title('Biases for each site');
 subplot(3,1,2); bar(sitesP_CLeft); title('CL scaling for each site');
 subplot(3,1,3); bar(sitesP_CRight); title('CR scaling for each site');
 
-%Plot the map of these site by site parameter values
-
 %% nice plot: overlay onto kirkcaldie brain
-sitesP = b(3*numSessions+1:end,:);
-sitesP_Biases = sitesP(1:3:end,:);
-sitesP_CLeft = sitesP(2:3:end,:);
-sitesP_CRight = sitesP(3:3:end,:);
-
 toDisplay = {sitesP_Biases,sitesP_CLeft,sitesP_CRight};%, sitesP_CLeft, sitesP_CRight};
 labels = {'bias','left contrast sensitivity','right contrast sensitivity'};
 % toDisplay = {sitesP_CRight};
@@ -243,6 +237,43 @@ h(3)=subplot(3,1,3);
 Diff = std(sitesP_CRight,[],3);
 hist(Diff); title('std in right contrast sens for all sites');
 % linkaxes(h,'x');
+
+%% Plot all psychometric curves (select noLaser session and plot all laser additive curves)
+sessionID = 51;
+g = g.setModel('C50');
+testC = [linspace(1,0,100)' zeros(100,1);
+         zeros(100,1) linspace(0,1,100)'];
+
+paramsNL = [sessionP_Biases(sessionID,:);
+          sessionP_CLeft(sessionID,:);
+          sessionP_CRight(sessionID,:)];
+shape = [c50sub.n(sessionID) c50sub.c50(sessionID)];
+      
+posMap = reshape(1:64,8,8)';
+figure;
+kimg=imread('B:\stuff\kirkcaldie_brain_BW.PNG');
+imX=image(-5:1:5,4:-1:-6,kimg); set(gca,'ydir','normal');
+set(gca,'Position',[0 0 1 1]);
+
+for site = 1:size(l.inactivationSite,1)
+    paramsL = [sitesP_Biases(site,:);
+               sitesP_CLeft(site,:);
+               sitesP_CRight(site,:)];
+    paramsL = paramsL + paramsNL;
+    
+    posIn = l.inactivationSite(site,:)/10 + [0.58 0.48];
+    axes;
+    
+    hold on;
+    plot(diff(testC,[],2),g.calculatePhat([paramsNL(:);shape'],testC),'--');
+    set(gca, 'ColorOrderIndex', 1);
+    plot(diff(testC,[],2),g.calculatePhat([paramsL(:);shape'],testC),'-');
+    hold off;  
+    
+    set(gca,'Position',[posIn(2) posIn(1) 0.045 0.045],'box','off','XColor',[0 0 0 0],'YColor',[0 0 0 0]);
+end
+% set(gcf,'color','white');
+
 
 %% (NO GLM) simple map of change in % choice at C=0 over the laser sites
 noLaser_responses = l.data.response(l.data.laserIdx==0 & diff(l.data.contrast_cond,[],2)==0);
