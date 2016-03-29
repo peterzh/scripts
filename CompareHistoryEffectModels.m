@@ -2,10 +2,13 @@
 %% %%%%%%%%%%%%%%% ONE SESSION HISTORY EFFECT %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% saveDir = 'B:\stuff';
 expRef = '2015-09-21_1_Hopkins';
+% expRef = '2015-09-21_2_Eijkman';
 g = GLM(expRef);
-models = {'Offset','C^N-subset','C^N-subset-hist-response','C^N-subset-hist-contrast','C^N-subset-hist-success'};
+models = {'C^N-subset','C^N-subset-hist-response','C^N-subset-hist-contrast','C^N-subset-hist-success'};
 
+phats = [];
 for m = 1:length(models)
     g1 = g.setModel(models{m});
     
@@ -28,10 +31,15 @@ for m = 1:length(models)
             g1.data.hist(1)=0;
     end
 %     keyboard;
-    g1 = g1.fitCV;
-    save(fullfile(saveDir,[expRef '_model-'  models{m} '.mat']),'g1');
+    g1 = g1.fitCV(10);
+    phats(:,m) = g1.p_hat;
+%     save(fullfile(saveDir,[expRef '_model-'  models{m} '.mat']),'g1');
    
 end
+
+bar(mean(log2(phats)));
+set(gca,'XTickLabel',models);
+ylabel('Log_2 likelihood');
 
 %% Load and plot
 LL=[];
@@ -80,7 +88,7 @@ g = GLM(D);
 
 %% Try many models
 models = {'C^N-subset','C^N-subset-hist-response','C^N-subset-hist-contrast','C^N-subset-hist-success'};
-LLs = [];
+phats = [];
 for m = 1:length(models)
     
     g1 = g.setModel(models{m});
@@ -103,10 +111,15 @@ for m = 1:length(models)
             g1.data.hist(1)=0;
     end
     
-    g1 = g1.fitCV(50);
-    save(fullfile(saveDir,[subject '_AllSessions_model-'  g1.modelString '.mat']),'g1');
+    g1 = g1.fitCV(10);
+    phats(:,m) = g1.p_hat;
+%     save(fullfile(saveDir,[subject '_AllSessions_model-'  g1.modelString '.mat']),'g1');
     disp('done');
 end
+
+bar(mean(log2(phats)));
+set(gca,'XTickLabel',models);
+ylabel('Log_2 likelihood');
 
 %% Load and plot models
 
