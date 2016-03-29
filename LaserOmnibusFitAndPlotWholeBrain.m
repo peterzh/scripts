@@ -3,40 +3,16 @@
 subject = {'Murphy','Spemann','Morgan','Whipple'};
 % subject = {'Whipple'};
 expRefs = dat.listExps(subject)';
-expRefs = vertcat(expRefs{:});
-% 
-% expRefs = {
-%     '2016-02-15_1_Whipple';
-% '2016-02-16_1_Whipple';
-% '2016-02-17_1_Whipple';
-% '2016-02-19_1_Whipple';
-% % '2016-02-22_1_Whipple';
-% '2016-02-23_2_Whipple';
-% '2016-02-24_1_Whipple';
-% '2016-02-25_1_Whipple';
-% '2016-02-15_2_Morgan';
-% '2016-02-18_1_Morgan';
-% '2016-02-23_1_Morgan';
-% '2016-02-24_1_Morgan';
-% '2016-02-16_1_Spemann';
-% '2016-02-17_1_Spemann';
-% '2016-02-18_1_Spemann';
-% '2016-02-19_1_Spemann';
-% % '2016-02-22_2_Spemann';
-% '2016-02-23_2_Spemann';
-% '2016-02-24_1_Spemann';
-% '2016-02-25_1_Spemann';
-% '2016-02-24_1_Murphy';
-% '2016-02-25_1_Murphy';
-% '2016-02-25_2_Murphy'
-% 
-% };
-%        
+expRefs = vertcat(expRefs{:}); 
 
+expRefs = {'2016-03-23_1_Murphy';
+           '2016-03-24_1_Murphy';
+           '2016-03-25_4_Murphy';
+           '2016-03-24_1_Spemann'};
+       
 %Combine all sessions
 D=struct;
 i=1;
-figure;
 for s = 1:length(expRefs)
     disp([num2str(s) '/' num2str(length(expRefs))]);
     try
@@ -46,18 +22,18 @@ for s = 1:length(expRefs)
             error('not enough trials');
         end
         
+        if max(d.laserIdx) < 50
+            disp(expRefs{s});
+            error('wrong data')
+        end
+        
         e = getrow(d,d.laserIdx==0);
         g=GLM(e).setModel('C50-subset').fit;
-%         g.plotFit; drawnow;
         c50sub.n(i) = g.parameterFits(5);
         c50sub.c50(i) = g.parameterFits(6);
-        subplot(7,7,i); g.plotFit;drawnow;
-        title(gca,'');
-        xlabel(gca,'');
-        ylabel(gca,'');
-        
-        g=GLM(e).setModel('C^N-subset').fit;
-        nsub.n(i) = g.parameterFits(5);
+
+%         g=GLM(e).setModel('C^N-subset').fit;
+%         nsub.n(i) = g.parameterFits(5);
         
 %         d.sessionID = ones(length(d.response),1)*s;
         d.sessionID = ones(length(d.response),1)*i;
@@ -70,10 +46,10 @@ for s = 1:length(expRefs)
 end
 expRefs(cellfun(@isempty,expRefs))=[];
 
-figure; subplot(1,2,1); hist(c50sub.n); xlabel('n');
-subplot(1,2,2); hist(c50sub.c50); xlabel('c50');
+% figure; subplot(1,2,1); hist(c50sub.n); xlabel('n');
+% subplot(1,2,2); hist(c50sub.c50); xlabel('c50');
 D = rmfield(D,'laserIdx');
-% D = getrow(D,D.repeatNum==1);
+D = getrow(D,D.repeatNum==1);
 l = laserGLM(D);
 % save('C:\Users\Peter\Desktop\scripts\LaserOmnibus_data.mat', 'l');
 
@@ -239,7 +215,10 @@ hist(Diff); title('std in right contrast sens for all sites');
 % linkaxes(h,'x');
 
 %% Plot all psychometric curves (select noLaser session and plot all laser additive curves)
-sessionID = 51;
+% Only possible for 1D contrast trials since the contrast can be projected
+% onto 1 axis.
+
+sessionID = 1;
 g = g.setModel('C50');
 testC = [linspace(1,0,100)' zeros(100,1);
          zeros(100,1) linspace(0,1,100)'];
@@ -247,9 +226,17 @@ testC = [linspace(1,0,100)' zeros(100,1);
 paramsNL = [sessionP_Biases(sessionID,:);
           sessionP_CLeft(sessionID,:);
           sessionP_CRight(sessionID,:)];
+% paramsNL = [mean(sessionP_Biases);
+%             mean(sessionP_CLeft);
+%             mean(sessionP_CRight)];
+% 
+% paramsNL = [0 0;
+%             3 0;
+%             0 3];
+        
 shape = [c50sub.n(sessionID) c50sub.c50(sessionID)];
+% shape = [mean(c50sub.n) mean(c50sub.c50)];
       
-posMap = reshape(1:64,8,8)';
 figure;
 kimg=imread('B:\stuff\kirkcaldie_brain_BW.PNG');
 imX=image(-5:1:5,4:-1:-6,kimg); set(gca,'ydir','normal');
@@ -260,32 +247,49 @@ for site = 1:size(l.inactivationSite,1)
                sitesP_CLeft(site,:);
                sitesP_CRight(site,:)];
     paramsL = paramsL + paramsNL;
-    
-    posIn = l.inactivationSite(site,:)/10 + [0.58 0.48];
+    posIn = l.inactivationSite(site,:)/10 + [0.58 0.465];
     axes;
-    
+
     hold on;
-    plot(diff(testC,[],2),g.calculatePhat([paramsNL(:);shape'],testC),'--');
+    phat_NL = g.calculatePhat([paramsNL(:);shape'],testC);
+    phat_NL = phat_NL(:,1:2);
+    plot(diff(testC,[],2),phat_NL,':','linewidth',1.5);
+    
     set(gca, 'ColorOrderIndex', 1);
-    plot(diff(testC,[],2),g.calculatePhat([paramsL(:);shape'],testC),'-');
+    
+    phat_L = g.calculatePhat([paramsL(:);shape'],testC);
+    phat_L = phat_L(:,1:2);
+    
+%     plot(diff(testC,[],2),phat_L,'-');
+    
+    if sum(sum(abs(phat_NL-phat_L))) < 0.001 %Prevents weird display bug when phat_NL = phat_L exactly
+        phat_L = phat_L + 0.001;
+    end
+    
+    fill([diff(testC,[],2); flipud(diff(testC,[],2))],[phat_NL(:,1);flipud(phat_L(:,1))],[0 0.4470 0.7410],'linestyle','none','facealpha',0.5);
+    fill([diff(testC,[],2); flipud(diff(testC,[],2))],[phat_NL(:,2);flipud(phat_L(:,2))],[0.8500 0.3250 0.0980],'linestyle','none','facealpha',0.5);
     hold off;  
     
-    set(gca,'Position',[posIn(2) posIn(1) 0.045 0.045],'box','off','XColor',[0 0 0 0],'YColor',[0 0 0 0]);
+    set(gca,'Position',[posIn(2) posIn(1) 0.07 0.07],'box','off','XColor',[0 0 0 0],'YColor',[0 0 0 0]);
 end
 % set(gcf,'color','white');
 
+%% (NO GLM) simple map of change in % choice at C=0 over the laser sites, median over sessions
 
-%% (NO GLM) simple map of change in % choice at C=0 over the laser sites
-noLaser_responses = l.data.response(l.data.laserIdx==0 & diff(l.data.contrast_cond,[],2)==0);
-noLaser_p = arrayfun(@(r)(sum(noLaser_responses==r)/length(noLaser_responses)),1:3);
-
-Laser_p=[];
-for site = 1:size(l.inactivationSite,1)
-    Laser_responses = l.data.response(l.data.laserIdx==site & diff(l.data.contrast_cond,[],2)==0);
-    Laser_p(site,:) = arrayfun(@(r)(sum(Laser_responses==r)/length(Laser_responses)),1:3);
+for s = 1:length(expRefs)
+    noLaser_responses = l.data.response(l.data.laserIdx==0 & diff(l.data.contrast_cond,[],2)==0 & l.data.sessionID==s);
+    noLaser_p = arrayfun(@(r)(sum(noLaser_responses==r)/length(noLaser_responses)),1:3);
+    
+    Laser_p=[];
+    for site = 1:size(l.inactivationSite,1)
+        Laser_responses = l.data.response(l.data.laserIdx==site & diff(l.data.contrast_cond,[],2)==0 & l.data.sessionID==s);
+        Laser_p(site,:) = arrayfun(@(r)(sum(Laser_responses==r)/length(Laser_responses)),1:3);
+    end
+    
+    pDiff(:,:,s) = bsxfun(@minus,Laser_p,noLaser_p);
 end
+pDiff = nanmedian(pDiff,3);
 
-pDiff = bsxfun(@minus,Laser_p,noLaser_p);
 figure;
 titles = {'pL_{laser} - pL_{noLaser}','pR_{laser} - pR_{noLaser}','pNG_{laser} - pNG_{noLaser}'};
 for lr=1:3

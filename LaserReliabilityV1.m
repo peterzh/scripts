@@ -38,28 +38,28 @@ expRefs = {
     '2016-03-01_2_Hopkins';
     };
 
-expRefs = {
-        '2016-01-27_1_Eijkman';
-    '2016-01-29_1_Eijkman';
-    '2016-02-01_1_Eijkman';
-    '2016-02-02_1_Eijkman';
-    '2016-02-03_1_Eijkman';
-    '2016-02-09_1_Eijkman';
-    '2016-02-11_1_Eijkman';
-    '2016-02-12_1_Eijkman';
-    '2016-02-15_1_Eijkman';
-    '2016-02-16_1_Eijkman';
-    '2016-02-16_2_Eijkman';
-    '2016-02-16_3_Eijkman';
-    '2016-02-17_1_Eijkman';
-    '2016-02-18_1_Eijkman';
-    '2016-02-19_1_Eijkman';
-    '2016-02-22_1_Eijkman';
-    '2016-02-24_1_Eijkman';
-    '2016-02-24_2_Eijkman';
-    };
+% expRefs = {
+%         '2016-01-27_1_Eijkman';
+%     '2016-01-29_1_Eijkman';
+%     '2016-02-01_1_Eijkman';
+%     '2016-02-02_1_Eijkman';
+%     '2016-02-03_1_Eijkman';
+%     '2016-02-09_1_Eijkman';
+%     '2016-02-11_1_Eijkman';
+%     '2016-02-12_1_Eijkman';
+%     '2016-02-15_1_Eijkman';
+%     '2016-02-16_1_Eijkman';
+%     '2016-02-16_2_Eijkman';
+%     '2016-02-16_3_Eijkman';
+%     '2016-02-17_1_Eijkman';
+%     '2016-02-18_1_Eijkman';
+%     '2016-02-19_1_Eijkman';
+%     '2016-02-22_1_Eijkman';
+%     '2016-02-24_1_Eijkman';
+%     '2016-02-24_2_Eijkman';
+%     };
 
-model = 'C^N';
+model = 'C50-subset';
 D=struct;
 a=1;
 figure;
