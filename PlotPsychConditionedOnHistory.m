@@ -18,6 +18,8 @@ for f = 1:length(expRefs)
             error('Mismatch laser + behav data length');
         end
         
+        g.data = structfun(@(f)f(1:end-20,:),g.data,'uni',0); %remove last 20 trials
+        
         alldat = addstruct(alldat,g.data);
         disp(expRefs{f});
         
@@ -35,7 +37,7 @@ D=structfun(@(f)f(~remove,:),D,'uni',0);
 %% Grab subsets and plot
 HISTORY = 3;
 
-contrast_groups = [-1 -0.5 -0.001 0.001 0.5 1];
+contrast_groups = [-1.1 -0.5 -0.001 0.001 0.5 1.1];
 contrast_groups_labs = {'High L','Low L','Zero','Low R','High R'};
 response_labs = {'Chose L','Chose R','NG'};
 ic = discretize(diff(D.contrast_cond,[],2),contrast_groups);
