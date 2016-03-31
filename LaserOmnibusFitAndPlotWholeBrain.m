@@ -197,20 +197,20 @@ for split = 1:length(C.TrainSize)
     b(1,:) = [];
     
     sitesP = b(3*numSessions+1:end,:);
-    sitesP_Biases(:,:,split) = sitesP(1:3:end,:);
-    sitesP_CLeft(:,:,split) = sitesP(2:3:end,:);
-    sitesP_CRight(:,:,split) = sitesP(3:3:end,:);
+    sitesP_Biases_split(:,:,split) = sitesP(1:3:end,:);
+    sitesP_CLeft_split(:,:,split) = sitesP(2:3:end,:);
+    sitesP_CRight_split(:,:,split) = sitesP(3:3:end,:);
 end
 
 figure;
 h(1)=subplot(3,1,1);
-Diff = std(sitesP_Biases,[],3);
+Diff = std(sitesP_Biases_split,[],3);
 hist(Diff); title('std in biases for all sites');
 h(2)=subplot(3,1,2);
-Diff = std(sitesP_CLeft,[],3);
+Diff = std(sitesP_CLeft_split,[],3);
 hist(Diff); title('std in left contrast sens for all sites');
 h(3)=subplot(3,1,3);
-Diff = std(sitesP_CRight,[],3);
+Diff = std(sitesP_CRight_split,[],3);
 hist(Diff); title('std in right contrast sens for all sites');
 % linkaxes(h,'x');
 
