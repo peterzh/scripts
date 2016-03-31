@@ -88,8 +88,9 @@ end
 
 opts=struct;
 opts.intr=0; %don't add a global intercept
-opts.alpha=1; %lasso regularisation
-% opts.alpha=0;
+% opts.alpha=1; %lasso regularisation (L1)
+% opts.alpha=0; %ridge (L2)
+opts.alpha=0.5; %elasticnet (both)
 
 % penalty = ones(1,size(X,2)); penalty(1:3:end)=0;
 % opts.penalty_factor=penalty; %Try penalising only the contrast terms
