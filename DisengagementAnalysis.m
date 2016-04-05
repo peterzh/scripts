@@ -52,17 +52,17 @@ for s = 1:length(expRefs)
             D.RT(t,1) = block.events.responseTimes(t) - block.events.interactiveOnTimes(t);
         end
     end
-
-    g = GLM(D).setModel('C^N').fit;
-    ph=g.calculatePhat(g.parameterFits,g.Zinput(g.data));
-    loglik=log2(ph(sub2ind(size(ph), [1:length(g.data.response)]', g.data.response)));
+    
+    g = GLM(getrow(D,D.repeatNum==1)).setModel('C^N').fit; %Fit only on repeatNum==1 data
+    ph = g.calculatePhat(g.parameterFits,g.Zinput(D)); %Test model on all data
+    loglik=log2(ph(sub2ind(size(ph), [1:length(D.response)]', D.response)));
     
     figure;
     
     h(1)=subplot(2,1,1); hold on;
-    for r = 1:max(g.data.response)
-        trials = find(g.data.response==r);
-        plot(trials,-loglik(g.data.response==r),'.','markersize',10);
+    for r = 1:max(D.response)
+        trials = find(D.response==r);
+        plot(trials,-loglik(D.response==r),'.','markersize',10);
     end
     hold off; xlabel('trial'); ylabel('negative log lik');
     legend({'Chose L','Chose R','NG'}); title(expRefs{s},'interpreter','none');
