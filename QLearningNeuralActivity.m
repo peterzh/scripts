@@ -2,7 +2,7 @@
 % load('B:\stuff\Neurons_FR_DB_EJ008_Batch3.mat')
 load('B:\stuff\Neurons_FR_DB_EJ008_Batch3_2.mat');
 DATA = NeuronsFR_DB_EJ008DABatch3;
-[unique,ia,ic]=unique(arrayfun(@(d)size(d.data,1),DATA));
+% [uq,ia,ic]=unique(arrayfun(@(d)size(d.data,1),DATA));
 
 D=struct;
 numNeurons = length(DATA);
@@ -76,3 +76,23 @@ for n = 1:numNeurons
     savefig(f,['B:\figures\GLM+Qlearning\correlatingwithNeuralActivity\neuron' num2str(n) '_numTrials' num2str(numTrials) '_QlogLik' num2str(loglik) '.fig']);
     close all;
 end
+
+%% Check PSTHs also show contrast dependence as armin finds in this data
+stim=[];
+neur=[];
+neurAll=[];stimAll=[];
+for n = 1:numNeurons
+    subplot(6,6,n);
+    correct=DATA(n).data(:,4)==1;
+    stim=DATA(n).data(correct,2);
+    neur=DATA(n).data(correct,23);
+    m=pivottable(stim,[],neur,'median');
+    plot(unique(stim),m,'.','markersize',10);
+%     xlabel('contrast');
+%     ylabel('neural activity');
+    neurAll=[neurAll;neur];
+    stimAll=[stimAll;stim];
+end
+
+m=pivottable(stimAll,[],neurAll,'median');
+figure; plot(unique(stim),m,'.','markersize',40);
