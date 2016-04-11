@@ -75,7 +75,7 @@ for s = 1:length(expRefs)
         
         if g.ContrastDimensions==1
             g=g.setModel('C50-subset').fit;
-            subplot(2,3,3);
+            subplot(3,3,3);
             g.plotFit;
         else
             g=g.setModel('C50').fit;
@@ -85,15 +85,23 @@ for s = 1:length(expRefs)
         loglik=log2(ph(sub2ind(size(ph), [1:length(D.response)]', D.response)));
         
         
-        h(1)=subplot(2,3,[1 2]); hold on;
+        h(1)=subplot(3,3,[1 2]); hold on;
         for r = 1:max(D.response)
             trials = find(D.response==r);
             plot(D.trialTimes(trials),-loglik(D.response==r),'.','markersize',10);
         end
         hold off; xlabel('trial start time'); ylabel('negative log lik');
-        legend({'Chose L','Chose R','NG'}); title(expRefs{s},'interpreter','none');
+        legend({'Choice=L','Choice=R','NG'}); title(expRefs{s},'interpreter','none');
         
-        h(2)=subplot(2,3,[4 5]); hold on;
+        h(2)=subplot(3,3,[4 5]);
+        hold on;
+        for r = 1:max(D.response)
+            trials = find(D.response==r);
+            plot(D.trialTimes(trials),diff(D.contrast_cond(D.response==r,:),[],2),'.','markersize',10);
+        end
+        hold off; xlabel('trial start time'); ylabel('contrast');
+        
+        h(3)=subplot(3,3,[7 8]); hold on;
         for r = 1:max(D.response)
             trials = find(D.response==r);
             medianRT = median(D.RT(D.response==r));
