@@ -1,6 +1,5 @@
 %Visualise the effect of parameters on GLM fits
 g = GLM('2016-03-16_1_Spemann').setModel('C50-subset').fit;
-which = 'sL';
 
 global GLM_PARAMS;
 GLM_PARAMS = g.parameterFits;
