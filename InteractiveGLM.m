@@ -28,6 +28,11 @@ for i=1:3
     title(titles{i});
     axis square;
 end
+caxis([0 1]);
+cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+    colormap(cmap);
+    
 b1 = uicontrol(fig,'Style','pushbutton','String','+ bL',...
                 'Position',[50 60 60 40]);
 b1.Callback = @(es,ed) InteractiveGLM_callbackPlot('bL',g,es,+0.5);

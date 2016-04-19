@@ -38,6 +38,12 @@ for i=1:3
     title(titles{i});
 end
 
+caxis([0 1]);
+cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+    colormap(cmap);
+    
+
 disp(GLM_PARAMS);
 % text(-0.4,-0.1,num2str(step));
 end
