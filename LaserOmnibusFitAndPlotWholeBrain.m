@@ -19,7 +19,7 @@ for s = 1:size(subject,1)
     for session = 1:length(expRefs)
         disp([num2str(session) '/' num2str(length(expRefs))]);
         try
-            d = laserGLM(expRefs{session}).data;
+            d = laserGLM(expRefs{session},'lick').data;
             d = structfun(@(x)(x(6:(end-14),:)),d,'uni',0); %trim first 5 trials and last 15
             if length(d.response) < 100
                 error('not enough trials');
@@ -172,6 +172,94 @@ for s = 1:size(subject,1)
             %         set(s(lr),'markeredgecolor',[1 1 1]*1,'linewidth',0);
             hold off;
             title(['Laser effect ' side{lr} ' ' labels{d}])
+            xlim([-5 5]);
+            a=a+1;
+        end
+    end
+    %
+    cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+    colormap(cmap);
+end
+
+%% nice plot: LvsR and GOvsNG maps 
+for s = 1:size(subject,1)
+    toDisplay = {[-diff(sites(s).Biases,[],2) log(sum(exp(sites(s).Biases),2))];
+                 [-diff(sites(s).CLeft,[],2) nan(52,1)];
+                 [-diff(sites(s).CRight,[],2) nan(52,1)]};%, sitesP_CLeft, sitesP_CRight};
+    labels = {'bias','CL sensitivity','CR sensitivity'};
+
+    dotSize=150;
+    dotShape='o';
+    kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
+    
+    a=1;
+    figure('name',subject{s,1});
+    side={'log(\pi_L/\pi_{R})','log(\pi_{LuR}/\pi_{NG})'};
+    for d = 1:length(toDisplay)
+        for lr=1:2
+            subplot(length(toDisplay),2,a);
+            imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+            set(imX,'alphadata',0.7);
+            hold on;
+            scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,toDisplay{d}(:,lr),dotShape,'filled'); axis equal; colorbar;
+            ylim([-6 4]);
+            
+            pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
+            
+            if lr==1
+                caxis([-1 1]*max(abs(pcntl)));
+            else
+                caxis(log(2*exp(0))+[-1 1]*max(abs(pcntl)));
+            end
+            %         set(s(lr),'markeredgecolor',[1 1 1]*1,'linewidth',0);
+            hold off;
+            title(['Laser effect ' side{lr} ' ' labels{d}])
+            xlim([-5 5]);
+            a=a+1;
+        end
+    end
+    %
+    cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+    colormap(cmap);
+end
+
+%% nice plot: reaction time effects and lick effects (no model)
+for s = 1:size(subject,1)
+    RTs = pivottable(l(s).data.laserIdx,l(s).data.response,l(s).data.RT,'median');
+    RTs = bsxfun(@minus,RTs(2:end,:),RTs(1,:));
+    RTs = RTs(:,1:2);
+    
+    Ls = pivottable(l(s).data.laserIdx,l(s).data.response,l(s).data.lickenergy,'median');
+    Ls = bsxfun(@minus,Ls(2:end,:),Ls(1,:));
+    Ls = Ls(:,1:2);
+    
+    toDisplay = {RTs,Ls};%, sitesP_CLeft, sitesP_CRight};
+    labels = {'RT^{median} - noLaser RT^{median}','lick^{median} - noLaser lick^{median}'};
+
+    dotSize=150;
+    dotShape='o';
+    kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
+    
+    a=1;
+    figure('name',subject{s,1});
+    side={'left choices','right choices'};
+    for d = 1:length(toDisplay)
+        for lr=1:2
+            subplot(length(toDisplay),2,a);
+            imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+            set(imX,'alphadata',0.7);
+            hold on;
+            scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,toDisplay{d}(:,lr),dotShape,'filled'); axis equal; colorbar;
+            ylim([-6 4]);
+            
+            pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
+            
+            caxis([-1 1]*max(abs(pcntl)));
+            %         set(s(lr),'markeredgecolor',[1 1 1]*1,'linewidth',0);
+            hold off;
+            title([side{lr} ' ' labels{d}])
             xlim([-5 5]);
             a=a+1;
         end
