@@ -20,6 +20,7 @@ ZL20_nolaser = nan(size(expRefs,1),1);
 ZR20_nolaser = nan(size(expRefs,1),1);
 
 pDiff = nan(size(expRefs,1),2);
+NUMTRIALS=[];
 for b=1:size(expRefs,1)
     disp([num2str(b) '/' num2str(size(expRefs,1))]);
     expRef = expRefs{b,1};
@@ -38,6 +39,7 @@ for b=1:size(expRefs,1)
     g.regularise = @(b)(0.05*sum(b.^2));
     
     % NO LASER CALCULATIONS
+    NUMTRIALS(b) = sum(gl.data.laserIdx==0 | gl.data.laserIdx==laserID);
     g.data = getrow(gl.data,gl.data.laserIdx==0);
     g = g.fit;
     P_noLaser(b,:) = g.parameterFits;
