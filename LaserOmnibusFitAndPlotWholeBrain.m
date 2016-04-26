@@ -152,7 +152,7 @@ for s = 1:size(subject,1)
 
     dotSize=150;
     dotShape='o';
-    kimg=imread('B:\stuff\kirkcaldie_brain_BW.PNG');
+    kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
     
     a=1;
     figure('name',subject{s,1});
@@ -165,7 +165,10 @@ for s = 1:size(subject,1)
             hold on;
             scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,toDisplay{d}(:,lr),dotShape,'filled'); axis equal; colorbar;
             ylim([-6 4]);
-            caxis([-1 1]*max(abs(toDisplay{d}(:))));
+            
+            pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
+            
+            caxis([-1 1]*max(abs(pcntl)));
             %         set(s(lr),'markeredgecolor',[1 1 1]*1,'linewidth',0);
             hold off;
             title(['Laser effect ' side{lr} ' ' labels{d}])
