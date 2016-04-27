@@ -52,7 +52,7 @@ for s = 1:size(subject,1)
     % figure; subplot(1,2,1); hist(c50sub.n); xlabel('n');
     % subplot(1,2,2); hist(c50sub.c50); xlabel('c50');
     D = rmfield(D,'laserIdx');
-    D = getrow(D,D.repeatNum==1);
+    D = getrow(D,D.repeatNum<5);
     l(s) = laserGLM(D);
     % save('C:\Users\Peter\Desktop\scripts\LaserOmnibus_data.mat', 'l');
 end
