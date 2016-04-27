@@ -1,4 +1,5 @@
 %% Many sessions concatenated 
+models = {'nolearn','aB+aS','aB','aS'};
 
 expRefs = {
     '2015-01-14_1_SS031_DA'
@@ -41,9 +42,23 @@ expRefs = {
 
 fig_dir = 'B:\figures\GLM+Qlearning'; 
 for b = 1:length(expRefs)
-    q=Q(expRefs(b)).fit;
-    set(gcf, 'Position', get(0,'Screensize'));
-%     print(fullfile(fig_dir,[expRefs{b} '.pdf' ]),'-dpdf','-painters');
-    savefig(fullfile(fig_dir,[expRefs{b} '.fig' ]));
+    q=Q(expRefs(b));
+%     q=q.setModel('aB+aS').fit;
+%     set(gcf, 'Position', get(0,'Screensize'));
+% %     print(fullfile(fig_dir,[expRefs{b} '.pdf' ]),'-dpdf','-painters');
+%     savefig(fullfile(fig_dir,[expRefs{b} '.fig' ]));
     close all;
+    
+    p=[];
+    for m=1:length(models)
+        p(:,m)=q.setModel(models{m}).crossvalidate;
+    end
+    
+    f=figure;
+    bar(mean(log2(p))); 
+    set(gca,'XTickLabel',models);
+    ylabel('Log_2 likelihood');
+    title(expRefs{b},'interpreter','none');
+    savefig(f,fullfile(fig_dir,[expRefs{b} 'modelComparison.fig' ]));
+    
 end
