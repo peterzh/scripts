@@ -25,10 +25,10 @@ for s = 1:size(subject,1)
                 error('not enough trials');
             end
             
-            if max(d.laserIdx) < 50
-                disp(expRefs{session});
-                error('wrong data')
-            end
+%             if max(d.laserIdx) < 50
+%                 disp(expRefs{session});
+%                 error('wrong data')
+%             end
             
             e = getrow(d,d.laserIdx==0);
             g=GLM(e).setModel('C50-subset').fit;
@@ -185,8 +185,8 @@ end
 %% nice plot: LvsR and GOvsNG maps 
 for s = 1:size(subject,1)
     toDisplay = {[-diff(sites(s).Biases,[],2) log(sum(exp(sites(s).Biases),2))];
-                 [-diff(sites(s).CLeft,[],2) nan(52,1)];
-                 [-diff(sites(s).CRight,[],2) nan(52,1)]};%, sitesP_CLeft, sitesP_CRight};
+                 [-diff(sites(s).CLeft,[],2) nan(size(sites(s).CLeft,1),1)];
+                 [-diff(sites(s).CRight,[],2) nan(size(sites(s).CRight,1),1)]};%, sitesP_CLeft, sitesP_CRight};
     labels = {'bias','CL sensitivity','CR sensitivity'};
 
     dotSize=150;
