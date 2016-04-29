@@ -1,10 +1,11 @@
 %% Load all sessions into one, marking each session separately.
 
-subject = {'Murphy',76;
-    'Spemann',76};
-%     'Morgan',175;
-%     'Whipple',164};
+subject = {'Murphy',116;
+            'Whipple',199;
+            'Morgan',198};
+
 clear l;
+
 for s = 1:size(subject,1)
     name = subject{s,1};
     firstSession = subject{s,2};
@@ -16,6 +17,7 @@ for s = 1:size(subject,1)
     %Combine all sessions
     D=struct;
     i=1;
+    c50sub=[]; nsub=[];
     for session = 1:length(expRefs)
         disp([num2str(session) '/' num2str(length(expRefs))]);
         try
@@ -32,11 +34,12 @@ for s = 1:size(subject,1)
             
             e = getrow(d,d.laserIdx==0);
             g=GLM(e).setModel('C50-subset').fit;
+            figure;g.plotFit;
             c50sub.n(i) = g.parameterFits(5);
             c50sub.c50(i) = g.parameterFits(6);
             
-            %         g=GLM(e).setModel('C^N-subset').fit;
-            %         nsub.n(i) = g.parameterFits(5);
+                    g=GLM(e).setModel('C^N-subset').fit;
+                    nsub.n(i) = g.parameterFits(5);
             
             %         d.sessionID = ones(length(d.response),1)*s;
             d.sessionID = ones(length(d.response),1)*i;
@@ -124,6 +127,30 @@ for s = 1:size(subject,1)
     sites(s).CLeft = sitesP(2:3:end,:);
     sites(s).CRight = sitesP(3:3:end,:);
     sites(s).laserSite = l(s).inactivationSite;
+    
+    % plot design matrix and repetitions per site
+    figure('name',subject{s,1});
+    subplot(1,2,1);
+    imagesc(X);
+%     hold on;
+%     pos=0;
+%     for session = 1:numSessions
+%         eRef = expRefs{session};
+%         numTrials = sum(L.data.sessionID==session);
+%         
+%         tx=text(50,pos + 0.5*numTrials,[eRef ' n=' num2str(numTrials)],'interpreter','none');
+%         tx.Color=[1 1 1];
+%         pos = pos + numTrials;
+%     end
+%     hold off;
+    
+    subplot(1,2,2);
+    tab = tabulate(l(s).data.laserIdx);
+    tab = tab(2:end,2);
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),200,tab,'o','filled'); axis equal; colorbar; colormap(gca,'parula')
+    axis([-5 5 -4 3]);
+    % set(s,'markeredgecolor',[0.8 0.8 0.8]);
+    title('Number of trials at each site');
 end
 
 %% Plot model parameters over sessions and sites
@@ -225,8 +252,36 @@ for s = 1:size(subject,1)
     colormap(cmap);
 end
 
-%% nice plot: reaction time effects and lick effects (no model)
+%% nice plot: performance effects of the laser (no model)
+figure;
+kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
+
 for s = 1:size(subject,1)
+    subplot(size(subject,1),1,s);
+    imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+    set(imX,'alphadata',0.7);
+    hold on;
+    
+    PF = pivottable(l(s).data.laserIdx,[],l(s).data.feedbackType==1,'mean');
+    PF = PF(2:end)-PF(1);
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),150,PF,'o','filled'); axis equal; colorbar;
+    ylim([-6 4]);
+    
+    pcntl = quantile(PF,[0.05 0.95]);
+    
+    caxis([-1 1]*max(abs(pcntl)));
+    hold off;
+    title(subject{s,1})
+    xlim([-5 5]);
+    
+    cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+    colormap(cmap);
+end
+
+
+%% nice plot: reaction time effects and lick effects (no model)
+for s = 1:size(subject,1)   
     RTs = pivottable(l(s).data.laserIdx,l(s).data.response,l(s).data.RT,'median');
     RTs = bsxfun(@minus,RTs(2:end,:),RTs(1,:));
     RTs = RTs(:,1:2);
@@ -235,7 +290,7 @@ for s = 1:size(subject,1)
     Ls = bsxfun(@minus,Ls(2:end,:),Ls(1,:));
     Ls = Ls(:,1:2);
     
-    toDisplay = {RTs,Ls};%, sitesP_CLeft, sitesP_CRight};
+    toDisplay = {PF,RTs,Ls};%, sitesP_CLeft, sitesP_CRight};
     labels = {'RT^{median} - noLaser RT^{median}','lick^{median} - noLaser lick^{median}'};
 
     dotSize=150;
@@ -306,30 +361,6 @@ for d = 1:length(params)
     end
 end
 colormap gray
-
-%% Plot number of repetitions in each site (TODO: PER SUBJECT)
-figure;
-subplot(1,2,1);
-imagesc(X);
-hold on;
-pos=0;
-for session = 1:length(expRefs)
-    eRef = expRefs{session};
-    numTrials = sum(L.data.sessionID==session);
-
-    tx=text(50,pos + 0.5*numTrials,[eRef ' n=' num2str(numTrials)],'interpreter','none');
-    tx.Color=[1 1 1];
-    pos = pos + numTrials;
-end
-hold off;
-
-subplot(1,2,2);
-tab = tabulate(l.data.laserIdx);
-tab = tab(2:end,2);
-scatter(l.inactivationSite(:,2),l.inactivationSite(:,1),dotSize,tab,dotShape,'filled'); axis equal; colorbar; colormap(gca,'parula')
-axis([-5 5 -4 3]);
-% set(s,'markeredgecolor',[0.8 0.8 0.8]);
-title('Number of trials at each site');
 
 %% Split-half reliability (TODO: PER SUBJECT)
 numTrials = length(Y);
