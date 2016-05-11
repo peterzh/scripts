@@ -1,52 +1,73 @@
-%% Load all sessions into one, marking each session separately.
+%% Construct list of expRefs
+expRefs = {
+    'Morgan',...
+    {'2016-04-29_1_Morgan';
+    '2016-05-03_2_Morgan';
+    '2016-05-04_1_Morgan'};
+    
+%     'Spemann',...
+%     {};
+    
+    'Whipple',...
+    {'2016-04-29_1_Whipple';
+    '2016-05-03_1_Whipple';
+    '2016-05-04_2_Whipple';
+    '2016-05-06_2_Whipple';
+    '2016-05-09_2_Whipple';
+    '2016-05-10_1_Whipple'};
+    
+    'Murphy',...
+    {'2016-04-28_2_Murphy';
+    '2016-04-29_1_Murphy';
+    '2016-05-09_1_Murphy';
+    '2016-05-10_1_Murphy'}
+    };
 
-subject = {'Murphy',116;
-            'Whipple',199;
-            'Morgan',198};
+numSubjects = size(expRefs,1);
 
+%% Load all sessions.
 clear l;
 
-for s = 1:size(subject,1)
-    name = subject{s,1};
-    firstSession = subject{s,2};
+c50_fits = cell(1,size(expRefs,1));
+cn_fits = cell(1,size(expRefs,1));
+
+for s = 1:numSubjects
+    name = expRefs{s,1};
+    eRefs = expRefs{s,2};
     
-    expRefs = dat.listExps(name)';
-    %     expRefs = vertcat(expRefs{firstSession:end});
-    expRefs = expRefs(firstSession:end);
+%     expRefs = dat.listExps(name)';
+%     %     expRefs = vertcat(expRefs{firstSession:end});
+%     expRefs = expRefs(firstSession:end);
     
     %Combine all sessions
     D=struct;
     i=1;
-    c50sub=[]; nsub=[];
-    for session = 1:length(expRefs)
-        disp([num2str(session) '/' num2str(length(expRefs))]);
+
+    for session = 1:length(eRefs)
+        disp([num2str(session) '/' num2str(length(eRefs))]);
         try
-            d = laserGLM(expRefs{session},'lick').data;
+            d = laserGLM(eRefs{session}).data;
             d = structfun(@(x)(x(6:(end-14),:)),d,'uni',0); %trim first 5 trials and last 15
             if length(d.response) < 100
                 error('not enough trials');
             end
             
-%             if max(d.laserIdx) < 50
-%                 disp(expRefs{session});
-%                 error('wrong data')
-%             end
-            
             e = getrow(d,d.laserIdx==0);
             g=GLM(e).setModel('C50-subset').fit;
-            figure;g.plotFit;
-            c50sub.n(i) = g.parameterFits(5);
-            c50sub.c50(i) = g.parameterFits(6);
+            %             figure;g.plotFit;
+            c50_fits{s}(i,:) = g.parameterFits(5:6);
+            %             c50sub.n(i) = g.parameterFits(5);
+            %             c50sub.c50(i) = g.parameterFits(6);
             
-                    g=GLM(e).setModel('C^N-subset').fit;
-                    nsub.n(i) = g.parameterFits(5);
+            g=GLM(e).setModel('C^N-subset').fit;
+            cn_fits{s}(i,:) = g.parameterFits(5);
             
             %         d.sessionID = ones(length(d.response),1)*s;
             d.sessionID = ones(length(d.response),1)*i;
             i=i+1;
             D = addstruct(D,d);
         catch
-            warning(expRefs{session});
+            warning(eRefs{session});
             expRefs{session}=[];
         end
     end
@@ -63,35 +84,32 @@ end
 %% Define and fit model 
 sites = struct('Biases',{},'CLeft',{},'CRight',{},'laserSite',{});
 sess = struct('Biases',{},'CLeft',{},'CRight',{});
-for s = 1:size(subject,1)
+X = cell(1,numSubjects);
+Y = cell(1,numSubjects);
+for s = 1:numSubjects
     numSessions = max(l(s).data.sessionID);
     numSites = max(l(s).data.laserIdx);
     numTrials = size(l(s).data.response,1);
     
-    Y = l(s).data.response;
+    Y{s} = l(s).data.response;
     
     %construct design matrix X (for loop for ease of understanding not speed!)
-    X = sparse(numTrials,3*numSessions + 3*numSites);
+    X{s} = sparse(numTrials,3*numSessions + 3*numSites);
     
-    % N = 0.4;
-    % cfn = @(c)(c.^N);
-    % c50=1;
-    % N=1;
-    % cfn = @(c)((c.^N)/(c.^N + c50^N));
     contrast_rep_fcn = @(c,n,c50)((c.^n)/(c.^n + c50^n));
     for i = 1:numTrials
         
         thisSession = l(s).data.sessionID(i);
-        cfn = @(c)contrast_rep_fcn(c,c50sub.n(thisSession),c50sub.c50(thisSession));
-        X(i,3*thisSession - 2) = 1;
-        X(i,3*thisSession - 1) = cfn(l(s).data.contrast_cond(i,1));
-        X(i,3*thisSession - 0) = cfn(l(s).data.contrast_cond(i,2));
+        cfn = @(c)contrast_rep_fcn(c,c50_fits{s}(thisSession,1),c50_fits{s}(thisSession,2));
+        X{s}(i,3*thisSession - 2) = 1;
+        X{s}(i,3*thisSession - 1) = cfn(l(s).data.contrast_cond(i,1));
+        X{s}(i,3*thisSession - 0) = cfn(l(s).data.contrast_cond(i,2));
         
         thisSite = l(s).data.laserIdx(i);
         if thisSite ~= 0
-            X(i,3*numSessions + 3*thisSite - 2) = 1;
-            X(i,3*numSessions + 3*thisSite - 1) = cfn(l(s).data.contrast_cond(i,1));
-            X(i,3*numSessions + 3*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
+            X{s}(i,3*numSessions + 3*thisSite - 2) = 1;
+            X{s}(i,3*numSessions + 3*thisSite - 1) = cfn(l(s).data.contrast_cond(i,1));
+            X{s}(i,3*numSessions + 3*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
             
         end
     end
@@ -104,9 +122,10 @@ for s = 1:size(subject,1)
     
     % penalty = ones(1,size(X,2)); penalty(1:3:end)=0;
     % opts.penalty_factor=penalty; %Try penalising only the contrast terms
-    fit=cvglmnet(X,Y,'multinomial',glmnetSet(opts));
-    cvglmnetPlot(fit);
-    b=cvglmnetCoef(fit,0);
+    fit=cvglmnet(X{s},Y{s},'multinomial',glmnetSet(opts));
+%     cvglmnetPlot(fit);
+    b=cvglmnetCoef(fit);
+    disp([expRefs{s,1} ' cv lambda min: ' num2str(fit.lambda_min)]);
     b=[b{1}-b{3} b{2}-b{3}];
     b(1,:) = [];
     
@@ -129,20 +148,18 @@ for s = 1:size(subject,1)
     sites(s).laserSite = l(s).inactivationSite;
     
     % plot design matrix and repetitions per site
-    figure('name',subject{s,1});
+    figure('name',expRefs{s,1});
     subplot(1,2,1);
-    imagesc(X);
-%     hold on;
-%     pos=0;
-%     for session = 1:numSessions
-%         eRef = expRefs{session};
-%         numTrials = sum(L.data.sessionID==session);
-%         
-%         tx=text(50,pos + 0.5*numTrials,[eRef ' n=' num2str(numTrials)],'interpreter','none');
-%         tx.Color=[1 1 1];
-%         pos = pos + numTrials;
-%     end
-%     hold off;
+    imagesc(X{s});
+    hold on;
+    pos=0;
+    for session = 1:numSessions
+        numTr = sum(l(s).data.sessionID==session);
+        tx=text(25,pos + 0.5*numTr,[expRefs{s,2}{session} ' n=' num2str(numTr)],'interpreter','none');
+        tx.Color=[1 1 1];
+        pos = pos + numTr;
+    end
+    hold off;
     
     subplot(1,2,2);
     tab = tabulate(l(s).data.laserIdx);
@@ -154,15 +171,15 @@ for s = 1:size(subject,1)
 end
 
 %% Plot model parameters over sessions and sites
-for s = 1:size(subject,1)
-    name = subject{s,1};
+for s = 1:numSubjects
+    name = expRefs{s,1};
     %Plot the session by session values of the parameters to see whether they
     %change much
     figure('name',name);
     subplot(3,1,1); bar(sess(s).Biases); title('Biases for each session');
     subplot(3,1,2); bar(sess(s).CLeft); title('CL scaling for each session');
     subplot(3,1,3); bar(sess(s).CRight); title('CR scaling for each session');
-    set(gca,'XTick',1:length(expRefs),'XTickLabel',expRefs,'XTickLabelRotation',90);
+    set(gca,'XTick',1:length(expRefs{s,2}),'XTickLabel',expRefs{s,2},'XTickLabelRotation',90);
     
     %Plot the site by site values of the parameters to see whether they
     %change much
@@ -172,8 +189,8 @@ for s = 1:size(subject,1)
     subplot(3,1,3); bar(sites(s).CRight); title('CR scaling for each site');
 end
 
-%% nice plot: overlay onto kirkcaldie brain
-for s = 1:size(subject,1)
+%% LASER EFFECT MAP: LvsNG and RvsNG maps
+for s = 1:numSubjects
     toDisplay = {sites(s).Biases,sites(s).CLeft,sites(s).CRight};%, sitesP_CLeft, sitesP_CRight};
     labels = {'bias','CL sensitivity','CR sensitivity'};
 
@@ -182,7 +199,7 @@ for s = 1:size(subject,1)
     kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
     
     a=1;
-    figure('name',subject{s,1});
+    figure('name',expRefs{s,1});
     side={'log(\pi_L/\pi_{NG})','log(\pi_R/\pi_{NG})'};
     for d = 1:length(toDisplay)
         for lr=1:2
@@ -193,9 +210,9 @@ for s = 1:size(subject,1)
             scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,toDisplay{d}(:,lr),dotShape,'filled'); axis equal; colorbar;
             ylim([-6 4]);
             
-            pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
-            
-            caxis([-1 1]*max(abs(pcntl)));
+%             pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
+%             caxis([-1 1]*max(abs(pcntl)));
+            caxis([-1 1]*max(abs(toDisplay{d}(:))));
             %         set(s(lr),'markeredgecolor',[1 1 1]*1,'linewidth',0);
             hold off;
             title(['Laser effect ' side{lr} ' ' labels{d}])
@@ -209,8 +226,8 @@ for s = 1:size(subject,1)
     colormap(cmap);
 end
 
-%% nice plot: LvsR and GOvsNG maps 
-for s = 1:size(subject,1)
+%% LASER EFFECT MAP: LvsR and GOvsNG maps 
+for s = 1:numSubjects
     toDisplay = {[-diff(sites(s).Biases,[],2) log(sum(exp(sites(s).Biases),2))];
                  [-diff(sites(s).CLeft,[],2) nan(size(sites(s).CLeft,1),1)];
                  [-diff(sites(s).CRight,[],2) nan(size(sites(s).CRight,1),1)]};%, sitesP_CLeft, sitesP_CRight};
@@ -221,7 +238,7 @@ for s = 1:size(subject,1)
     kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
     
     a=1;
-    figure('name',subject{s,1});
+    figure('name',expRefs{s,1});
     side={'log(\pi_L/\pi_{R})','log(\pi_{LuR}/\pi_{NG})'};
     for d = 1:length(toDisplay)
         for lr=1:2
@@ -232,13 +249,14 @@ for s = 1:size(subject,1)
             scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,toDisplay{d}(:,lr),dotShape,'filled'); axis equal; colorbar;
             ylim([-6 4]);
             
-            pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
-            
-            if lr==1
-                caxis([-1 1]*max(abs(pcntl)));
-            else
-                caxis(log(2*exp(0))+[-1 1]*max(abs(pcntl)));
-            end
+            %             pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
+%             caxis([-1 1]*max(abs(pcntl)));
+            caxis([-1 1]*max(abs(toDisplay{d}(:))));
+%             if lr==1
+%                 caxis([-1 1]*max(abs(pcntl)));
+%             else
+%                 caxis(log(2*exp(0))+[-1 1]*max(abs(pcntl)));
+%             end
             %         set(s(lr),'markeredgecolor',[1 1 1]*1,'linewidth',0);
             hold off;
             title(['Laser effect ' side{lr} ' ' labels{d}])
@@ -252,12 +270,12 @@ for s = 1:size(subject,1)
     colormap(cmap);
 end
 
-%% nice plot: performance effects of the laser (no model)
+%% LASER EFFECT MAP: performance effects of the laser (no model)
 figure;
 kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
 
-for s = 1:size(subject,1)
-    subplot(size(subject,1),1,s);
+for s = 1:numSubjects
+    subplot(numSubjects,1,s);
     imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
     set(imX,'alphadata',0.7);
     hold on;
@@ -271,7 +289,7 @@ for s = 1:size(subject,1)
     
     caxis([-1 1]*max(abs(pcntl)));
     hold off;
-    title(subject{s,1})
+    title(expRefs{s,1})
     xlim([-5 5]);
     
     cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
@@ -280,7 +298,7 @@ for s = 1:size(subject,1)
 end
 
 
-%% nice plot: reaction time effects and lick effects (no model)
+%% LASER EFFECT MAP: reaction time effects and lick effects (no model)
 for s = 1:size(subject,1)   
     RTs = pivottable(l(s).data.laserIdx,l(s).data.response,l(s).data.RT,'median');
     RTs = bsxfun(@minus,RTs(2:end,:),RTs(1,:));
@@ -362,37 +380,142 @@ for d = 1:length(params)
 end
 colormap gray
 
-%% Split-half reliability (TODO: PER SUBJECT)
-numTrials = length(Y);
-C = cvpartition(numTrials,'KFold',3);
-
-for split = 1:length(C.TrainSize)
-    Ys = Y(C.training(split));
-    Xs = X(C.training(split),:);
-    fit=cvglmnet(X,Y,'multinomial',glmnetSet(opts));
-    b=cvglmnetCoef(fit);
-    b=[b{1}-b{3} b{2}-b{3}];
-    b(1,:) = [];
+%% RELIABILITY: Split half reliability
+for s = 1:numSubjects
+    numTrials = length(Y{s});
+    C = cvpartition(numTrials,'KFold',2);
     
-    sitesP = b(3*numSessions+1:end,:);
-    sitesP_Biases_split(:,:,split) = sitesP(1:3:end,:);
-    sitesP_CLeft_split(:,:,split) = sitesP(2:3:end,:);
-    sitesP_CRight_split(:,:,split) = sitesP(3:3:end,:);
+    sitesP=[];
+    sitesP_Biases_split=[];
+    sitesP_CLeft_split=[];
+    sitesP_CRight_split=[];
+    for split = 1:C.NumTestSets
+        Ysplit = Y{s}(C.training(split));
+        Xsplit = X{s}(C.training(split),:);
+        fit=cvglmnet(Xsplit,Ysplit,'multinomial',glmnetSet(opts));
+        b=cvglmnetCoef(fit);
+        b=[b{1}-b{3} b{2}-b{3}];
+        b(1,:) = [];
+        
+        numSessions = length(expRefs{s,2});
+        
+        sitesP = b(3*numSessions+1:end,:);
+        sitesP_Biases_split(:,:,split) = sitesP(1:3:end,:);
+        sitesP_CLeft_split(:,:,split) = sitesP(2:3:end,:);
+        sitesP_CRight_split(:,:,split) = sitesP(3:3:end,:);
+    end
+    
+%     figure('name',expRefs{s,1});
+%     h(1)=subplot(3,1,1);
+%     Diff = std(sitesP_Biases_split,[],3);
+%     hist(Diff); title('std in biases for all sites');
+%     h(2)=subplot(3,1,2);
+%     Diff = std(sitesP_CLeft_split,[],3);
+%     hist(Diff); title('std in left contrast sens for all sites');
+%     h(3)=subplot(3,1,3);
+%     Diff = std(sitesP_CRight_split,[],3);
+%     hist(Diff); title('std in right contrast sens for all sites');
+%     % linkaxes(h,'x');
+    
+    figure('name',expRefs{s,1})
+    subplot(3,2,1);
+    Diff = std(sitesP_Biases_split,[],3);
+    sx(1)=scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),300,Diff(:,1),'s','filled'); axis equal; colorbar; 
+    subplot(3,2,2);
+    sx(2)=scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),300,Diff(:,2),'s','filled'); axis equal; colorbar;
+    
+    subplot(3,2,3);
+    Diff = std(sitesP_CLeft_split,[],3);
+    sx(3)=scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),300,Diff(:,1),'s','filled'); axis equal; colorbar;
+    subplot(3,2,4);
+    sx(4)=scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),300,Diff(:,2),'s','filled'); axis equal; colorbar;
+    
+    subplot(3,2,5);
+    Diff = std(sitesP_CRight_split,[],3);
+    sx(5)=scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),300,Diff(:,1),'s','filled'); axis equal; colorbar;
+    subplot(3,2,6);
+    sx(6)=scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),300,Diff(:,2),'s','filled'); axis equal; colorbar;
+    
+    cmap = colormap(gray);
+    colormap(flipud(cmap));
+    set(sx,'markeredgecolor',[0 0 0]);
+%     set(get(gcf,'children'),'Xlim',[-5 5],'Ylim',[-6 4])
 end
 
-figure;
-h(1)=subplot(3,1,1);
-Diff = std(sitesP_Biases_split,[],3);
-hist(Diff); title('std in biases for all sites');
-h(2)=subplot(3,1,2);
-Diff = std(sitesP_CLeft_split,[],3);
-hist(Diff); title('std in left contrast sens for all sites');
-h(3)=subplot(3,1,3);
-Diff = std(sitesP_CRight_split,[],3);
-hist(Diff); title('std in right contrast sens for all sites');
-% linkaxes(h,'x');
+%% RELIABILITY: Shuffle analysis
+%Totally randomise the labelling of each trial to a laser site. Under this
+%shuffling there should be no true laser effect. Thus model fits will give
+%a null distribution
+NUM_SHUFFLES = 150;
+for s = 1:numSubjects
+    numSessions = max(l(s).data.sessionID);
+    numSites = max(l(s).data.laserIdx);
+    numTrials = size(l(s).data.response,1);
+    
+    Y = l(s).data.response;
+    Xsess = sparse(numTrials,3*numSessions);
+    
+    %CONSTRUCT SESSION PORTION OF DESIGN MATRIX
+    contrast_rep_fcn = @(c,n,c50)((c.^n)/(c.^n + c50^n));
+    for i = 1:numTrials
+        thisSession = l(s).data.sessionID(i);
+        cfn = @(c)contrast_rep_fcn(c,c50_fits{s}(thisSession,1),c50_fits{s}(thisSession,2));
+        Xsess(i,3*thisSession - 2) = 1;
+        Xsess(i,3*thisSession - 1) = cfn(l(s).data.contrast_cond(i,1));
+        Xsess(i,3*thisSession - 0) = cfn(l(s).data.contrast_cond(i,2));
+    end
+    
+    clear shuffle;
+    for shuff = 1:NUM_SHUFFLES
+        %CONSTRUCT SITE PORTION OF DESIGN MATRIX MANY DIFFERENT TIMES
+        Xsites = sparse(numTrials,3*numSites);
+        siteIDs = l(s).data.laserIdx(randperm(numTrials));
+        for i=1:numTrials
+            thisSite = siteIDs(i);
+            if thisSite > 0
+                Xsites(i,3*numSessions + 3*thisSite - 2) = 1;
+                Xsites(i,3*numSessions + 3*thisSite - 1) = cfn(l(s).data.contrast_cond(i,1));
+                Xsites(i,3*numSessions + 3*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
+            end
+        end
+        
+        fit=cvglmnet([Xsess Xsites],Y,'multinomial',glmnetSet(opts));
+        b=cvglmnetCoef(fit);
+        b=[b{1}-b{3} b{2}-b{3}];
+        b(1,:) = [];
+        
+        shuffle.sitesP(:,:,shuff) = b(3*numSessions+1:end,:);
+        shuffle.Bias(:,:,shuff) = shuffle.sitesP(1:3:end,:,shuff);
+        shuffle.CLeft(:,:,shuff) = shuffle.sitesP(2:3:end,:,shuff);
+        shuffle.CRight(:,:,shuff) = shuffle.sitesP(3:3:end,:,shuff);
 
-%% Plot all psychometric curves (select noLaser session and plot all laser additive curves) (TODO: PER SUBJECT)
+    end
+    
+    PLOTTING_VARS = {shuffle.Bias, shuffle.CLeft, shuffle.CRight};
+    PLOTTING_VARS_labels = {'Bias','CLeft','CRight'};
+    for plotVar=1:3
+        figure('name',[expRefs{s,1} '_' PLOTTING_VARS_labels{plotVar}]);
+        kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
+        imX=image(-5:1:5,4:-1:-6,kimg); set(gca,'ydir','normal');
+        set(gca,'Position',[0 0 1 1]);
+        
+        for loc = 1:size(l(s).inactivationSite,1)
+            posIn = l(s).inactivationSite(loc,1:2)/10 + [0.58 0.465];
+            
+            null = squeeze(PLOTTING_VARS{plotVar}(loc,:,:))';
+            axes; scatter(null(:,1),null(:,2),'b.');
+            
+            hold on;
+            fitted = sites(s).Biases(loc,:);
+            scatter(fitted(1),fitted(2),'r+');
+            hold off; axis auto;
+            set(gca,'Position',[posIn(2) posIn(1) 0.07 0.07],'box','off','XColor',[0 0 0 0],'YColor',[0 0 0 0]);
+        end
+    end
+
+end
+
+%% LASER EFFECT MAP: psychometric curves) TODO: 2D task
 % Only possible for 1D contrast trials since the contrast can be projected
 % onto 1 axis.
 
