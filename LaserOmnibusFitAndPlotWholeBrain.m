@@ -5,8 +5,8 @@ expRefs = {
     '2016-05-03_2_Morgan';
     '2016-05-04_1_Morgan'};
     
-%     'Spemann',...
-%     {};
+    'Spemann',...
+    {'2016-05-11_2_Spemann'};
     
     'Whipple',...
     {'2016-04-29_1_Whipple';
@@ -14,16 +14,35 @@ expRefs = {
     '2016-05-04_2_Whipple';
     '2016-05-06_2_Whipple';
     '2016-05-09_2_Whipple';
-    '2016-05-10_1_Whipple'};
+    '2016-05-10_1_Whipple';
+    '2016-05-11_1_Whipple'};
     
     'Murphy',...
     {'2016-04-28_2_Murphy';
     '2016-04-29_1_Murphy';
     '2016-05-09_1_Murphy';
-    '2016-05-10_1_Murphy'}
+    '2016-05-10_1_Murphy';
+    '2016-05-11_1_Murphy'}
     };
 
+% expt = 'sparse_bilateral_2D';
+% 
+% expRefs = {
+%     'Spemann',...
+%     LaserOmnibusCheckSessions('Spemann',expt);
+%     
+%     'Murphy',...
+%     LaserOmnibusCheckSessions('Murphy',expt);
+%     
+%     'Morgan',...
+%     LaserOmnibusCheckSessions('Morgan',expt);
+%     
+%     'Whipple',...
+%     LaserOmnibusCheckSessions('Whipple',expt)
+%     };
+
 numSubjects = size(expRefs,1);
+clear shuffle; disp('done');
 
 %% Load all sessions.
 clear l;
@@ -33,46 +52,38 @@ cn_fits = cell(1,size(expRefs,1));
 
 for s = 1:numSubjects
     name = expRefs{s,1};
-    eRefs = expRefs{s,2};
-    
-%     expRefs = dat.listExps(name)';
-%     %     expRefs = vertcat(expRefs{firstSession:end});
-%     expRefs = expRefs(firstSession:end);
     
     %Combine all sessions
     D=struct;
-    i=1;
-
-    for session = 1:length(eRefs)
-        disp([num2str(session) '/' num2str(length(eRefs))]);
-        try
-            d = laserGLM(eRefs{session}).data;
-            d = structfun(@(x)(x(6:(end-14),:)),d,'uni',0); %trim first 5 trials and last 15
-            if length(d.response) < 100
-                error('not enough trials');
-            end
-            
-            e = getrow(d,d.laserIdx==0);
-            g=GLM(e).setModel('C50-subset').fit;
-            %             figure;g.plotFit;
-            c50_fits{s}(i,:) = g.parameterFits(5:6);
-            %             c50sub.n(i) = g.parameterFits(5);
-            %             c50sub.c50(i) = g.parameterFits(6);
-            
-            g=GLM(e).setModel('C^N-subset').fit;
-            cn_fits{s}(i,:) = g.parameterFits(5);
-            
-            %         d.sessionID = ones(length(d.response),1)*s;
-            d.sessionID = ones(length(d.response),1)*i;
-            i=i+1;
-            D = addstruct(D,d);
-        catch
-            warning(eRefs{session});
-            expRefs{session}=[];
-        end
-    end
-    expRefs(cellfun(@isempty,expRefs))=[];
+    %i=1;
     
+    for session = 1:length(expRefs{s,2})
+        disp([num2str(session) '/' num2str(length(expRefs{s,2}))]);
+        %try
+        d = laserGLM(expRefs{s,2}{session}).data;
+        d = structfun(@(x)(x(6:(end-14),:)),d,'uni',0); %trim first 5 trials and last 15
+        if length(d.response) < 100
+            error('not enough trials');
+        end
+        
+        e = getrow(d,d.laserIdx==0);
+        g=GLM(e).setModel('C50-subset').fit;
+        %             figure;g.plotFit;
+        c50_fits{s}(session,:) = g.parameterFits(5:6);
+        %             c50sub.n(i) = g.parameterFits(5);
+        %             c50sub.c50(i) = g.parameterFits(6);
+        
+        g=GLM(e).setModel('C^N-subset').fit;
+        cn_fits{s}(session,:) = g.parameterFits(5);
+        
+        %         d.sessionID = ones(length(d.response),1)*s;
+        d.sessionID = ones(length(d.response),1)*session;
+        %i=i+1;
+        D = addstruct(D,d);
+        %catch
+        %   warning(eRefs{session});
+        %end
+    end
     % figure; subplot(1,2,1); hist(c50sub.n); xlabel('n');
     % subplot(1,2,2); hist(c50sub.c50); xlabel('c50');
     D = rmfield(D,'laserIdx');
@@ -193,6 +204,14 @@ end
 for s = 1:numSubjects
     toDisplay = {sites(s).Biases,sites(s).CLeft,sites(s).CRight};%, sitesP_CLeft, sitesP_CRight};
     labels = {'bias','CL sensitivity','CR sensitivity'};
+    
+    if exist('shuffle','var') %if shuffle analysis done
+        bias_null_quart = quantile(shuffle(s).Bias,[0.05 0.95],3);
+        cl_null_quart = quantile(shuffle(s).CLeft,[0.05 0.95],3);
+        cr_null_quart = quantile(shuffle(s).CRight,[0.05 0.95],3);
+        null_quarts = {bias_null_quart,cl_null_quart,cr_null_quart};
+    end
+            
 
     dotSize=150;
     dotShape='o';
@@ -208,6 +227,12 @@ for s = 1:numSubjects
             set(imX,'alphadata',0.7);
             hold on;
             scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,toDisplay{d}(:,lr),dotShape,'filled'); axis equal; colorbar;
+
+            if exist('shuffle','var') %if shuffle analysis done              
+                sig = double(toDisplay{d}(:,lr) < null_quarts{d}(:,lr,1) | toDisplay{d}(:,lr) > null_quarts{d}(:,lr,2));
+                sig(sig==0)=nan;
+                scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),sig*15,'ok','filled'); 
+            end
             ylim([-6 4]);
             
 %             pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
@@ -447,6 +472,7 @@ end
 %shuffling there should be no true laser effect. Thus model fits will give
 %a null distribution
 NUM_SHUFFLES = 150;
+shuffle = struct;
 for s = 1:numSubjects
     numSessions = max(l(s).data.sessionID);
     numSites = max(l(s).data.laserIdx);
@@ -465,17 +491,17 @@ for s = 1:numSubjects
         Xsess(i,3*thisSession - 0) = cfn(l(s).data.contrast_cond(i,2));
     end
     
-    clear shuffle;
     for shuff = 1:NUM_SHUFFLES
+        disp([num2str(shuff) '/' num2str(NUM_SHUFFLES)]);
         %CONSTRUCT SITE PORTION OF DESIGN MATRIX MANY DIFFERENT TIMES
         Xsites = sparse(numTrials,3*numSites);
         siteIDs = l(s).data.laserIdx(randperm(numTrials));
         for i=1:numTrials
             thisSite = siteIDs(i);
             if thisSite > 0
-                Xsites(i,3*numSessions + 3*thisSite - 2) = 1;
-                Xsites(i,3*numSessions + 3*thisSite - 1) = cfn(l(s).data.contrast_cond(i,1));
-                Xsites(i,3*numSessions + 3*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
+                Xsites(i,3*thisSite - 2) = 1;
+                Xsites(i,3*thisSite - 1) = cfn(l(s).data.contrast_cond(i,1));
+                Xsites(i,3*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
             end
         end
         
@@ -484,14 +510,14 @@ for s = 1:numSubjects
         b=[b{1}-b{3} b{2}-b{3}];
         b(1,:) = [];
         
-        shuffle.sitesP(:,:,shuff) = b(3*numSessions+1:end,:);
-        shuffle.Bias(:,:,shuff) = shuffle.sitesP(1:3:end,:,shuff);
-        shuffle.CLeft(:,:,shuff) = shuffle.sitesP(2:3:end,:,shuff);
-        shuffle.CRight(:,:,shuff) = shuffle.sitesP(3:3:end,:,shuff);
+        shuffle(s).sitesP(:,:,shuff) = b(3*numSessions+1:end,:);
+        shuffle(s).Bias(:,:,shuff) = shuffle(s).sitesP(1:3:end,:,shuff);
+        shuffle(s).CLeft(:,:,shuff) = shuffle(s).sitesP(2:3:end,:,shuff);
+        shuffle(s).CRight(:,:,shuff) = shuffle(s).sitesP(3:3:end,:,shuff);
 
     end
     
-    PLOTTING_VARS = {shuffle.Bias, shuffle.CLeft, shuffle.CRight};
+    PLOTTING_VARS = {shuffle(s).Bias, shuffle(s).CLeft, shuffle(s).CRight};
     PLOTTING_VARS_labels = {'Bias','CLeft','CRight'};
     for plotVar=1:3
         figure('name',[expRefs{s,1} '_' PLOTTING_VARS_labels{plotVar}]);
