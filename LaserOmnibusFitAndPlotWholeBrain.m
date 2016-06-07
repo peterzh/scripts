@@ -15,12 +15,14 @@ expRefs = {
     LaserOmnibusCheckSessions('Whipple',expt)
     };
 
-numSubjects = size(expRefs,1);
-clear shuffle; disp('done');
+save(['\\basket.cortexlab.net\home\omnibus_files\' expt '.mat'],'expRefs');
+disp('done');
 
 %% Load all sessions.
 clear l;
-
+clear shuffle;
+load(['\\basket.cortexlab.net\home\omnibus_files\sparse_bilateral_2D.mat']);
+numSubjects = size(expRefs,1);
 c50_fits = cell(1,size(expRefs,1));
 cn_fits = cell(1,size(expRefs,1));
 
@@ -73,6 +75,7 @@ X = cell(1,numSubjects);
 Y = cell(1,numSubjects);
 figure;
 
+fitMode = 1;
 for s = 1:numSubjects
     numSessions = max(l(s).data.sessionID);
     numSites = max(l(s).data.laserIdx);
@@ -106,7 +109,7 @@ for s = 1:numSubjects
 %     opts.intr=1;
     % opts.alpha=1; %lasso regularisation (L1)
     %     opts.alpha=0; %ridge (L2)
-    opts.alpha=0.5; %elasticnet (both)
+%     opts.alpha=0.5; %elasticnet (both)
     
     % penalty = ones(1,size(X,2)); penalty(1:3:end)=0;
     % opts.penalty_factor=penalty; %Try penalising only the contrast terms
@@ -162,6 +165,45 @@ for s = 1:numSubjects
     title('Number of trials at each site');
 end
 
+%% Two-stage fitting alternative
+%Fits nonLaser parameters first and then the laser effects
+fitMode = 2;
+for s = 1:numSubjects
+    twoStageFitOpts = struct;
+    twoStageFitOpts.intr = 1;
+    
+    numSessions = length(expRefs{s,2});
+    
+    %First fit non-laser portion of data
+    nonL_idx = l(s).data.laserIdx==0;
+    XnL = X{s}(nonL_idx,:);
+    YnL = Y{s}(nonL_idx);
+    fit=cvglmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
+    
+    %pull out parameter fits
+    b=cvglmnetCoef(fit);
+    b=[b{1}-b{3} b{2}-b{3}];
+    b(1,:) = [];
+    sess(s).Biases = b(1:3:end,:);
+    sess(s).CLeft = b(2:3:end,:);
+    sess(s).CRight = b(3:3:end,:);
+    
+    % %Then fit laser portion of data, using nonLaser params as offsets
+    XL = X{s}(l(s).data.laserIdx>0,:);
+    YL = Y{s}(l(s).data.laserIdx>0);
+    twoStageFitOpts.intr = 0;
+    twoStageFitOpts.offset = cvglmnetPredict(fit,XL(:,1:(3*numSessions)),[],'link');
+    fit2=glmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
+    
+    %pull out parameter fits
+    b=glmnetCoef(fit2,0.01);
+    b=[b{1}-b{3} b{2}-b{3}];
+    b(1,:) = [];
+    sites(s).Biases = b(1:3:end,:);
+    sites(s).CLeft = b(2:3:end,:);
+    sites(s).CRight = b(3:3:end,:);    
+end
+
 %% Plot model parameters over sessions and sites
 for s = 1:numSubjects
     name = expRefs{s,1};
@@ -184,20 +226,7 @@ end
 for s = 1:numSubjects
     toDisplay = {sites(s).Biases,sites(s).CLeft,sites(s).CRight};%, sitesP_CLeft, sitesP_CRight};
     labels = {'bias','CL sensitivity','CR sensitivity'};
-    
-    if exist('shuffle','var') %if shuffle analysis done
-        null_quarts_95 = {quantile(shuffle(s).Bias,[0.025 0.975],3),...
-            quantile(shuffle(s).CLeft,[0.025 0.975],3),...
-            quantile(shuffle(s).CRight,[0.025 0.975],3)};
-        
-        null_quarts_99 = {quantile(shuffle(s).Bias,[0.005 0.995],3),...
-            quantile(shuffle(s).CLeft,[0.005 0.995],3),...
-            quantile(shuffle(s).CRight,[0.005 0.995],3)};
-%     elseif exist('Qshuffle','var')
-%         
-    end
-    
-    
+
     dotSize=150;
     dotShape='o';
     kimg=imread('D:\kirkcaldie_brain_BW.PNG');
@@ -212,13 +241,13 @@ for s = 1:numSubjects
             set(imX,'alphadata',0.7);
             hold on;
             
-            if exist('shuffle','var') %if shuffle analysis done
-                sig95 = double(toDisplay{d}(:,lr) < null_quarts_95{d}(:,lr,1) | toDisplay{d}(:,lr) > null_quarts_95{d}(:,lr,2));
-                sig99 = double(toDisplay{d}(:,lr) < null_quarts_99{d}(:,lr,1) | toDisplay{d}(:,lr) > null_quarts_99{d}(:,lr,2));
-                shuffle(s).sig95(:,lr,d) = sig95;
-                shuffle(s).sig99(:,lr,d) = sig99;
-                sig95(sig95==0)=0.1;
+            if exist('Qshuffle','var') && fitMode == 1 %if shuffle analysis done using 2 stage fitting
+                ci_95 = Qshuffle(s).CI95(:,lr,d);
+                ci_99 = Qshuffle(s).CI99(:,lr,d);
                 
+                sig95 = double(toDisplay{d}(:,lr) < ci_95(1) | ci_95(2) < toDisplay{d}(:,lr));
+                sig99 = double(toDisplay{d}(:,lr) < ci_99(1) | ci_99(2) < toDisplay{d}(:,lr));
+                sig95(sig95==0)=0.1;                
                 sig99(sig99==0)=0.1;
                 %                 scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),sig*15,'ok','filled');
                 scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),sig99*150,toDisplay{d}(:,lr),dotShape,'filled'); axis equal; colorbar;
@@ -316,7 +345,6 @@ for s = 1:numSubjects
         linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
     colormap(cmap);
 end
-
 
 %% LASER EFFECT MAP: reaction time effects and lick effects (no model)
 for s = 1:numSubjects
@@ -429,7 +457,7 @@ for s = 1:numSubjects
     %     set(get(gcf,'children'),'Xlim',[-5 5],'Ylim',[-6 4])
 end
 
-%% RELIABILITY: Shuffle analysis
+%% RELIABILITY: Shuffle analysis (OLD UNUSED because doesn't contain 2 stage fitting)
 %Totally randomise the labelling of each trial to a laser site. Under this
 %shuffling there should be no true laser effect. Thus model fits will give
 %a null distribution
@@ -511,20 +539,22 @@ for s = 1:numSubjects
     
 end
 
-
-%% RELIABILITY: Fake inactivation location
+%% RELIABILITY: Fake inactivation location with two-stage fitting
 %adds another laser site from a certain proportion of NoLaser trials. Since
 %we know the laser has no true effect here, the estimated parameters from
 %the fit can give an indication of the null distribution under this
 %behavioural model.
 Qshuffle = struct;
 proportion = 0.1;
-NUM_SHUFFLES = 300;
+NUM_SHUFFLES = 200;
+lambda = 0.01;
+figure('name',num2str(lambda));
 for s = 1:numSubjects
-    nonL_idx = find(l(s).data.laserIdx==0);
+    numSessions = length(expRefs{s,2});
+    nonL_idx = l(s).data.laserIdx==0;
     for shuff = 1:NUM_SHUFFLES
-        disp(shuff);
-        nL = randsample(nonL_idx,round(proportion*length(nonL_idx)));
+        disp([num2str(shuff) '/' num2str(NUM_SHUFFLES)]);
+        nL = randsample(find(nonL_idx),round(proportion*sum(nonL_idx)));
         QX = zeros(size(X{s},1),3);
         
         for t = 1:length(nL)
@@ -537,24 +567,67 @@ for s = 1:numSubjects
             QX(trial,2) = cfn(c(1));
             QX(trial,3) = cfn(c(2));
         end
-        
-        %         QX = rand(size(X{s},1),3);
-        %         QX = bsxfun(@minus,QX,mean(QX));
-        
-        fit=glmnet([X{s} QX],Y{s},'multinomial',glmnetSet(opts));
-        %         fit=glmnet([QX],Y{s},'multinomial',glmnetSet(opts));
-        
-        b=glmnetCoef(fit,0.01);
+               
+% %         %one stage fitting
+%         fit=glmnet([X{s} QX],Y{s},'multinomial',glmnetSet(opts));
+%         b=glmnetCoef(fit,0.01);
+%         b=[b{1}-b{3} b{2}-b{3}];
+%         b(1,:) = [];
+% 
+        %two stage fitting
+        twoStageFitOpts = struct;
+        twoStageFitOpts.intr = 1;
+
+        %First fit non-laser portion of data
+        XnL = X{s}(l(s).data.laserIdx==0 & QX(:,1)==0,:);        
+        YnL = Y{s}(l(s).data.laserIdx==0 & QX(:,1)==0);
+        fit=cvglmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
+% 
+%         % %Then fit laser portion of data, using nonLaser params as offsets
+        XL = [X{s} QX];
+        XL = XL(l(s).data.laserIdx>0 | QX(:,1)==1,:);
+        YL = Y{s}(l(s).data.laserIdx>0 | QX(:,1)==1);
+        twoStageFitOpts.intr = 0;
+        twoStageFitOpts.offset = cvglmnetPredict(fit,XL(:,1:(3*numSessions)),'lambda_1se','link');
+        fit2=glmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
+% 
+%         %pull out parameter fits
+        b=glmnetCoef(fit2,lambda);
         b=[b{1}-b{3} b{2}-b{3}];
-        b(1,:) = [];
+        b(1,:) = [];        
         
+       
         Qshuffle(s).Bias(shuff,:) = b(end-2,:);
         Qshuffle(s).CLeft(shuff,:) = b(end-1,:);
         Qshuffle(s).CRight(shuff,:) = b(end,:);
     end
+    
+    Qshuffle(s).Bias95CI = quantile(Qshuffle(s).Bias,[0.025 0.975]);
+    Qshuffle(s).Bias99CI = quantile(Qshuffle(s).Bias,[0.005 0.995]);
+    
+    Qshuffle(s).CLeft95CI = quantile(Qshuffle(s).CLeft,[0.025 0.975]);
+    Qshuffle(s).CLeft99CI = quantile(Qshuffle(s).CLeft,[0.005 0.995]);
+    
+    Qshuffle(s).CRight95CI = quantile(Qshuffle(s).CRight,[0.025 0.975]);
+    Qshuffle(s).CRight99CI = quantile(Qshuffle(s).CRight,[0.005 0.995]);
+
+    Qshuffle(s).CI95(:,:,1) = Qshuffle(s).Bias95CI;
+    Qshuffle(s).CI95(:,:,2) = Qshuffle(s).CLeft95CI;
+    Qshuffle(s).CI95(:,:,3) = Qshuffle(s).CRight95CI;
+        
+    Qshuffle(s).CI99(:,:,1) = Qshuffle(s).Bias99CI;
+    Qshuffle(s).CI99(:,:,2) = Qshuffle(s).CLeft99CI;
+    Qshuffle(s).CI99(:,:,3) = Qshuffle(s).CRight99CI;
+
+    
+    subplot(numSubjects,1,s);
+    hist(Qshuffle(s).Bias);
+    title(expRefs{s,1});
+    
 end
 
 %% Check whether model is fitting well on non-laser trials
+g = g.setModel('C50');
 for s = 1:numSubjects
     figure('name',expRefs{s,1});
     numSessions = max(l(s).data.sessionID);
@@ -596,27 +669,129 @@ for s = 1:numSubjects
     end
     
     ax=get(gcf,'children');
-    set(ax,'Xticklabel','');
+    set(ax,'Xticklabel','','box','off');
     set(ax(1),'Xticklabel',{'L','NG','R'},'xtick',1:3);
 end
 
-%% Non-laser bootstrapping of parameters
-numiter = 100;
+%% Check whether model is fitting well on laser trials
+g = g.setModel('C50');
+figure;
 for s = 1:numSubjects
+    numSessions = max(l(s).data.sessionID);
+    actual = nan(size(l(s).inactivationSite,1)+1,4,3,numSessions);
+    pred = nan(size(l(s).inactivationSite,1)+1,4,3,numSessions);
+%     figure('name',expRefs{s,1});
+    numSessions = max(l(s).data.sessionID);
+    for session = 1:numSessions
+        D = getrow(l(s).data,l(s).data.sessionID==session);
+        tested_sites = unique(D.laserIdx);
+        
+        stim_labels = {'C=0','CL=CR','C=L','C=R'};
+        stim = cell(1,4);
+        stim{1} = sum(D.contrast_cond,2)==0;
+        stim{2} = ~stim{1} & (D.contrast_cond(:,1)==D.contrast_cond(:,2));
+        stim{3} = diff(D.contrast_cond,[],2)<0;
+        stim{4} = diff(D.contrast_cond,[],2)>0;
+        stim_idx = sum(bsxfun(@times,1:4,cell2mat(stim)),2);
+        
+        params = [sess(s).Biases(session,1),...
+            sess(s).CLeft(session,1),...
+            sess(s).CRight(session,1),...
+            sess(s).Biases(session,2),...
+            sess(s).CLeft(session,2),...
+            sess(s).CRight(session,2),...
+            c50_fits{s}(session,:)];
+        
+        for locidx = 1:length(tested_sites)
+            loc = tested_sites(locidx);
+            if loc==0
+                paramsL = params;
+            else
+                paramsL = params + [sites(s).Biases(loc,1),...
+                                    sites(s).CLeft(loc,1),...
+                                    sites(s).CRight(loc,1),...
+                                    sites(s).Biases(loc,2),...
+                                    sites(s).CLeft(loc,2),...
+                                    sites(s).CRight(loc,2),0,0];
+            end
+            
+            for stim_type = 1:4
+                pred(loc+1,stim_type,:,session) = mean(g.calculatePhat(paramsL, D.contrast_cond(stim{stim_type},:)));
+               
+                r = D.response(D.laserIdx==loc & stim_idx == stim_type);
+                actual(loc+1,stim_type,:,session) = sum([r==1 r==2 r==3])/length(r);
+                
+            end
+            
+            
+        end
+        
+%         %TODO: when combining 'actual' and 'pred' data across sessions there aren't an equal number of sites tested
+%         actual(:,:,1,session) = pivottable(D.laserIdx,stim_idx,D.response==1,'mean');
+%         actual(:,:,2,session) = pivottable(D.laserIdx,stim_idx,D.response==2,'mean');
+%         actual(:,:,3,session) = pivottable(D.laserIdx,stim_idx,D.response==3,'mean');
+        
+
+    end
+    
+    dotSize = 100;
+    coords = [4 3;l(s).inactivationSite(:,1) l(s).inactivationSite(:,2)];
+    for stim_type = 1:4
+        subplot(numSubjects,4,4*s - 4 + stim_type);
+        scatter(coords(:,2),coords(:,1),dotSize,nanmean(actual(:,stim_type,1,:),4),'s','filled'); caxis([0 1]);
+        hold on;
+        scatter(coords(:,2)+5,coords(:,1),dotSize,nanmean(actual(:,stim_type,3,:),4),'s','filled');caxis([0 1]);
+        scatter(coords(:,2)+10,coords(:,1),dotSize,nanmean(actual(:,stim_type,2,:),4),'s','filled');caxis([0 1]);
+        
+        scatter(coords(:,2),coords(:,1)-12,dotSize,nanmean(pred(:,stim_type,1,:),4),'s','filled'); caxis([0 1]);
+        scatter(coords(:,2)+5,coords(:,1)-12,dotSize,nanmean(pred(:,stim_type,3,:),4),'s','filled'); caxis([0 1]);
+        scatter(coords(:,2)+10,coords(:,1)-12,dotSize,nanmean(pred(:,stim_type,2,:),4),'s','filled'); caxis([0 1]);
+        
+        hold off
+%         xlim([0 14]); 
+        %             axis square;
+        
+        if s == 1
+            title(stim_labels{stim_type});
+        end
+        
+        if stim_type == 1
+            ylabel(expRefs{s,1});
+        end
+    end
+    
+    ax=get(gcf,'children');
+    set(ax,'Xticklabel','','Yticklabel','');
+    set(ax(1),'XTickLabel',{'pL','pNG','pR'},'Xtick',[2 7 12],'YTickLabel',{'pred','actual'},'ytick',[-12 0])
+%     set(ax(1),'Xticklabel',{'L','NG','R'},'xtick',1:3);
+end
+
+%% Bootstrapping of non-laser parameters to see if they tradeoff
+%also plot model output to see whether parameter tradeoff causes variation
+%in the model output
+numiter = 100;
+stim_labels = {'C=0','CL=CR','C=L','C=R'};
+
+for s = 1:numSubjects
+    D = l(s).data;
     numSessions = length(expRefs{s,2});
     Xb = X{s};
-    
+    Yb = Y{s};
     bootstrap = struct;
+    
+    model_output = nan(numiter,3,4,numSessions);
     for iter = 1:numiter
+
         for session = 1:numSessions
-            sidx = l(s).data.sessionID==session;
+            sidx = D.sessionID==session;
             ridx = randsample(find(sidx),sum(sidx),true);
-            Xb(sidx,:) = Xb(ridx,:);
+            Xb(sidx,:) = X{s}(ridx,:);
+            Yb(sidx) = Y{s}(ridx);
         end
         
         %fit
-        fit=glmnet(Xb,Y{s},'multinomial',glmnetSet(opts));
-        b=glmnetCoef(fit,0.001);
+        fit=glmnet(Xb,Yb,'multinomial',glmnetSet(opts));
+        b=glmnetCoef(fit,0.01);
         b=[b{1}-b{3} b{2}-b{3}];
         b(1,:) = [];
         
@@ -624,16 +799,48 @@ for s = 1:numSubjects
         bootstrap.Biases(:,:,iter) = sessionP_b(1:3:end,:);
         bootstrap.CLeft(:,:,iter) = sessionP_b(2:3:end,:);
         bootstrap.CRight(:,:,iter) = sessionP_b(3:3:end,:);
+        
+        %model output
+        D.y_hat = glmnetPredict(fit,X{s},0.01,'response');
+        for session = 1:numSessions
+            E = getrow(D,D.laserIdx==0 & D.sessionID==session);
+            stim = cell(1,4);
+            stim{1} = sum(E.contrast_cond,2)==0;
+            stim{2} = ~stim{1} & (E.contrast_cond(:,1)==E.contrast_cond(:,2));
+            stim{3} = diff(E.contrast_cond,[],2)<0;
+            stim{4} = diff(E.contrast_cond,[],2)>0;
+            
+            for stim_type = 1:4
+                r = E.response(stim{stim_type});
+                model_output(iter,:,stim_type,session)=mean(E.y_hat(stim{stim_type},:));
+            end
+        end
     end
     
-    biases = permute(bootstrap.Biases,[3 2 1]);
-    sensL = permute(bootstrap.CLeft,[3 2 1]);
-    sensR = permute(bootstrap.CRight,[3 2 1]);
-    labels = {'b_{LvNG}','sL_{LvNG}','sR_{LvNG}','sR_{RvNG}','sL_{RvNG}','b_{RvNG}'};
-    for session = 1:numSessions
-        figure('name',[expRefs{s,1} ' session ' num2str(session)]);
-        gplotmatrix([biases(:,1,session) sensL(:,1,session) sensR(:,1,session) sensR(:,2,session) sensL(:,2,session) biases(:,2,session)],[],[],'b','.',5,'on','none',labels);
+%     biases = permute(bootstrap.Biases,[3 2 1]);
+%     sensL = permute(bootstrap.CLeft,[3 2 1]);
+%     sensR = permute(bootstrap.CRight,[3 2 1]);
+%     labels = {'b_{LvNG}','sL_{LvNG}','sR_{LvNG}','sR_{RvNG}','sL_{RvNG}','b_{RvNG}'};
+%     for session = 1:numSessions
+%         figure('name',[expRefs{s,1} ' session ' num2str(session)]);
+%         gplotmatrix([biases(:,1,session) sensL(:,1,session) sensR(:,1,session) sensR(:,2,session) sensL(:,2,session) biases(:,2,session)],[],[],'b','.',5,'on','none',labels);
+%     end
+    
+    figure('name',expRefs{s,1});
+    for session = 1:numSessions 
+        for stim_type = 1:4
+            subplot(numSessions,4,4*session - 4 + stim_type);
+            plot(1:3,model_output(:,:,stim_type,session),'b.'); ylim([0 1]); xlim([0.5 3.5]);
+%             boxplot(model_output(:,[1 3 2],stim_type,session),'plotstyle','compact'); ylim([0 1]);
+            if session == 1
+                title(stim_labels{stim_type});
+            end
+        end
     end
+    ax=get(gcf,'children');
+    set(ax,'Xticklabel','','Yticklabel','','box','off');
+    set(ax(1),'XTickLabel',{'pL','pR','pNG'});
+    ylabel(ax(1),'probability');
 end
 
 %% LASER EFFECT MAP: psychometric curves)
@@ -734,9 +941,10 @@ end
 %% Laser GLM: overall crossvalidated goodness of fit
 cv_gof = [];
 for s = 1:numSubjects
-    cv = cvpartition(size(X{s},1),'kfold',10);
+    numSessions = length(expRefs{s,2});
+    cv = cvpartition(size(X{s},1),'kfold',5);
     
-    p_hats = nan(cv.NumObservations,1);
+    p_hats = nan(cv.NumObservations,2);
     for iter = 1:cv.NumTestSets
         trainX = X{s}(cv.training(iter),:);
         trainY = Y{s}(cv.training(iter));
@@ -744,20 +952,29 @@ for s = 1:numSubjects
         testX = X{s}(cv.test(iter),:);
         testY = Y{s}(cv.test(iter));
         
-        fit=glmnet(trainX,trainY,'multinomial',glmnetSet(opts));
-        p = glmnetPredict(fit,testX,0.001,'response');
-        p_hats(cv.test(iter)) = p(sub2ind(size(p), [1:length(testY)]', testY));
+        %one stage fitting
+        fit=cvglmnet(trainX,trainY,'multinomial',glmnetSet(opts));
+        p = cvglmnetPredict(fit,testX,'lambda_min','response');
+        p_hats(cv.test(iter),1) = p(sub2ind(size(p), [1:length(testY)]', testY));
+        
+        %two stage fitting
+        %TODOTODOTODOTODOTODOTO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        nonL_idx = l(s).data.laserIdx==0 & cv.training(iter);
+        fit=cvglmnet(trainX(:,1:(3*numSessions)),trainY,'multinomial',glmnetSet(opts));
+        p = cvglmnetPredict(fit,testX(:,1:(3*numSessions)),'lambda_min','response');
+        p_hats(cv.test(iter),2) = p(sub2ind(size(p), [1:length(testY)]', testY));
+       
+        
     end
     
     tab=tabulate(Y{s}); tab=tab(:,3)/100;
     guess_bpt = sum(tab.*log2(tab));
-    loglik_bpt = mean(log2(p_hats));
     
-    cv_gof(s) = loglik_bpt-guess_bpt;
+    cv_gof(s,:) = mean(log2(p_hats))-guess_bpt;
 end
 
 bar(cv_gof); ylabel('loglik [bits] relative to guessing @~-1.5');
-set(gca,'XTickLabel',expRefs(:,1));
+set(gca,'XTickLabel',expRefs(:,1),'xtick',1:numSubjects);
 
 %% (NO GLM) simple map of change in % choice at C=0 over the laser sites, median over sessions (TODO: PER SUBJECT)
 
