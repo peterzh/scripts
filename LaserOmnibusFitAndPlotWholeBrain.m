@@ -181,7 +181,7 @@ for s = 1:numSubjects
     fit=cvglmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
     
     %pull out parameter fits
-    b=cvglmnetCoef(fit);
+    b=cvglmnetCoef(fit1);
     b=[b{1}-b{3} b{2}-b{3}];
     b(1,:) = [];
     sess(s).Biases = b(1:3:end,:);
@@ -192,11 +192,11 @@ for s = 1:numSubjects
     XL = X{s}(l(s).data.laserIdx>0,:);
     YL = Y{s}(l(s).data.laserIdx>0);
     twoStageFitOpts.intr = 0;
-    twoStageFitOpts.offset = cvglmnetPredict(fit,XL(:,1:(3*numSessions)),[],'link');
-    fit2=glmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
+    twoStageFitOpts.offset = cvglmnetPredict(fit1,XL(:,1:(3*numSessions)),[],'link');
+    fit2=cvglmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
     
     %pull out parameter fits
-    b=glmnetCoef(fit2,0.01);
+    b=cvglmnetCoef(fit2);
     b=[b{1}-b{3} b{2}-b{3}];
     b(1,:) = [];
     sites(s).Biases = b(1:3:end,:);
@@ -547,8 +547,7 @@ end
 Qshuffle = struct;
 proportion = 0.1;
 NUM_SHUFFLES = 200;
-lambda = 0.01;
-figure('name',num2str(lambda));
+figure('name',num2str(lambda_laserTrials));
 for s = 1:numSubjects
     numSessions = length(expRefs{s,2});
     nonL_idx = l(s).data.laserIdx==0;
@@ -588,11 +587,11 @@ for s = 1:numSubjects
         XL = XL(l(s).data.laserIdx>0 | QX(:,1)==1,:);
         YL = Y{s}(l(s).data.laserIdx>0 | QX(:,1)==1);
         twoStageFitOpts.intr = 0;
-        twoStageFitOpts.offset = cvglmnetPredict(fit,XL(:,1:(3*numSessions)),'lambda_1se','link');
-        fit2=glmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
+        twoStageFitOpts.offset = cvglmnetPredict(fit,XL(:,1:(3*numSessions)),[],'link');
+        fit2=cvglmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
 % 
 %         %pull out parameter fits
-        b=glmnetCoef(fit2,lambda);
+        b=cvglmnetCoef(fit2);
         b=[b{1}-b{3} b{2}-b{3}];
         b(1,:) = [];        
         
@@ -944,34 +943,52 @@ for s = 1:numSubjects
     numSessions = length(expRefs{s,2});
     cv = cvpartition(size(X{s},1),'kfold',5);
     
-    p_hats = nan(cv.NumObservations,2);
+    p_hats = nan(cv.NumObservations,3);
     for iter = 1:cv.NumTestSets
+        disp(iter);
         trainX = X{s}(cv.training(iter),:);
         trainY = Y{s}(cv.training(iter));
         
         testX = X{s}(cv.test(iter),:);
         testY = Y{s}(cv.test(iter));
         
-        %one stage fitting
+        %one stage fitting without a global intercept
+        opts.intr=0;
         fit=cvglmnet(trainX,trainY,'multinomial',glmnetSet(opts));
         p = cvglmnetPredict(fit,testX,'lambda_min','response');
         p_hats(cv.test(iter),1) = p(sub2ind(size(p), [1:length(testY)]', testY));
         
-        %two stage fitting
-        %TODOTODOTODOTODOTODOTO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        nonL_idx = l(s).data.laserIdx==0 & cv.training(iter);
-        fit=cvglmnet(trainX(:,1:(3*numSessions)),trainY,'multinomial',glmnetSet(opts));
-        p = cvglmnetPredict(fit,testX(:,1:(3*numSessions)),'lambda_min','response');
+        %one stage fitting with a global intercept
+        opts.intr=1;
+        fit = cvglmnet(trainX,trainY,'multinomial',glmnetSet(opts));
+        p = cvglmnetPredict(fit,testX,'lambda_min','response');
         p_hats(cv.test(iter),2) = p(sub2ind(size(p), [1:length(testY)]', testY));
-       
         
+        %two stage fitting with a nonLaser global intercept only
+        twoStageFitOpts = struct;
+        twoStageFitOpts.intr = 1;
+        nonL_idx = l(s).data.laserIdx(cv.training(iter))==0;
+        fit1=cvglmnet(trainX(nonL_idx,1:(3*numSessions)),trainY(nonL_idx),'multinomial',glmnetSet(twoStageFitOpts));
+        
+        L_idx = l(s).data.laserIdx(cv.training(iter))>0;
+        twoStageFitOpts.offset = cvglmnetPredict(fit1,trainX(L_idx,1:(3*numSessions)),[],'link');
+        twoStageFitOpts.intr = 0;
+        fit2=cvglmnet(trainX(L_idx,((3*numSessions)+1):end),trainY(L_idx),'multinomial',glmnetSet(twoStageFitOpts));
+        
+        nL_idx_test = l(s).data.laserIdx(cv.test(iter))==0;
+        L_idx_test = l(s).data.laserIdx(cv.test(iter))>0;
+        
+        offset = cvglmnetPredict(fit1,testX(:,1:(3*numSessions)),[],'link');
+        p = cvglmnetPredict(fit2,testX(:,((3*numSessions)+1):end),[],'response',[],offset);
+        p_hats(cv.test(iter),3) = p(sub2ind(size(p), [1:length(testY)]', testY));
+       
     end
     
     tab=tabulate(Y{s}); tab=tab(:,3)/100;
     guess_bpt = sum(tab.*log2(tab));
     
     cv_gof(s,:) = mean(log2(p_hats))-guess_bpt;
-end
+end; disp('done');
 
 bar(cv_gof); ylabel('loglik [bits] relative to guessing @~-1.5');
 set(gca,'XTickLabel',expRefs(:,1),'xtick',1:numSubjects);
