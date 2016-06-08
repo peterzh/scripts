@@ -178,7 +178,7 @@ for s = 1:numSubjects
     nonL_idx = l(s).data.laserIdx==0;
     XnL = X{s}(nonL_idx,:);
     YnL = Y{s}(nonL_idx);
-    fit=cvglmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
+    fit1=cvglmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
     
     %pull out parameter fits
     b=cvglmnetCoef(fit1);
@@ -241,7 +241,7 @@ for s = 1:numSubjects
             set(imX,'alphadata',0.7);
             hold on;
             
-            if exist('Qshuffle','var') && fitMode == 1 %if shuffle analysis done using 2 stage fitting
+            if exist('Qshuffle','var') && fitMode == 2 %if shuffle analysis done using 2 stage fitting
                 ci_95 = Qshuffle(s).CI95(:,lr,d);
                 ci_99 = Qshuffle(s).CI99(:,lr,d);
                 
