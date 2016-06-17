@@ -1,6 +1,7 @@
-%% Construct list of expRefs
-expt = 'sparse_bilateral_2D';
+%% 
+expt = 'sparse_unilateral_2D';
 
+%% Construct + save list of expRefs
 expRefs = {
     'Spemann',...
     LaserOmnibusCheckSessions('Spemann',expt);
@@ -8,9 +9,9 @@ expRefs = {
     'Murphy',...
     LaserOmnibusCheckSessions('Murphy',expt);
     
-        'Morgan',...
-        LaserOmnibusCheckSessions('Morgan',expt);
-    
+%         'Morgan',...
+%         LaserOmnibusCheckSessions('Morgan',expt);
+%     
     'Whipple',...
     LaserOmnibusCheckSessions('Whipple',expt)
     };
@@ -20,8 +21,11 @@ disp('done');
 
 %% Load all sessions.
 clear l;
-clear shuffle;
-load(['\\basket.cortexlab.net\home\omnibus_files\sparse_bilateral_2D.mat']);
+clear Qshuffle;
+load(['\\basket.cortexlab.net\home\omnibus_files\' expt '.mat']);
+
+MOREDATA=0;
+
 numSubjects = size(expRefs,1);
 c50_fits = cell(1,size(expRefs,1));
 cn_fits = cell(1,size(expRefs,1));
@@ -36,7 +40,14 @@ for s = 1:numSubjects
     for session = 1:length(expRefs{s,2})
         disp([num2str(session) '/' num2str(length(expRefs{s,2}))]);
         %try
-        d = laserGLM(expRefs{s,2}{session}).data;
+        d = laserGLM(expRefs{s,2}{session});
+        
+        if MOREDATA==1
+            d = d.addData('lick');
+            d = d.addData('pupil');
+        end
+        
+        d = d.data;
         d = structfun(@(x)(x(6:(end-14),:)),d,'uni',0); %trim first 5 trials and last 15
         if length(d.response) < 100
             error('not enough trials');
@@ -68,9 +79,17 @@ for s = 1:numSubjects
     % save('C:\Users\Peter\Desktop\scripts\LaserOmnibus_data.mat', 'l');
 end
 
+%% Fix all C50 and N, and ^N parameters constant for each mouse
+c50_fits=cellfun(@(a)(repmat(mean(a,1),size(a,1),1)),c50_fits,'uni',0);
+cn_fits=cellfun(@(a)(repmat(mean(a,1),size(a,1),1)),cn_fits,'uni',0);
+
 %% Define and fit model
 sites = struct('Biases',{},'CLeft',{},'CRight',{},'laserSite',{});
 sess = struct('Biases',{},'CLeft',{},'CRight',{});
+
+sites2 = struct('Bias',{},'Sens',{},'laserSite',{});
+sess2 = struct('Bias',{},'Sens',{});
+
 X = cell(1,numSubjects);
 Y = cell(1,numSubjects);
 figure;
@@ -85,7 +104,9 @@ for s = 1:numSubjects
     
     %construct design matrix X (for loop for ease of understanding not speed!)
     X{s} = sparse(numTrials,3*numSessions + 3*numSites);
-    
+    X_LvNG{s} = sparse(numTrials,2*numSessions + 2*numSites);
+    X_RvNG{s} = sparse(numTrials,2*numSessions + 2*numSites);
+
     contrast_rep_fcn = @(c,n,c50)((c.^n)/(c.^n + c50^n));
     for i = 1:numTrials
         
@@ -95,31 +116,32 @@ for s = 1:numSubjects
         X{s}(i,3*thisSession - 1) = cfn(l(s).data.contrast_cond(i,1));
         X{s}(i,3*thisSession - 0) = cfn(l(s).data.contrast_cond(i,2));
         
+        X_LvNG{s}(i,2*thisSession - 1) = 1;
+        X_LvNG{s}(i,2*thisSession - 0) = cfn(l(s).data.contrast_cond(i,1));
+        
+        X_RvNG{s}(i,2*thisSession - 1) = 1;
+        X_RvNG{s}(i,2*thisSession - 0) = cfn(l(s).data.contrast_cond(i,2));
+        
         thisSite = l(s).data.laserIdx(i);
         if thisSite ~= 0
             X{s}(i,3*numSessions + 3*thisSite - 2) = 1;
             X{s}(i,3*numSessions + 3*thisSite - 1) = cfn(l(s).data.contrast_cond(i,1));
             X{s}(i,3*numSessions + 3*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
             
+            X_LvNG{s}(i,2*numSessions + 2*thisSite - 1) = 1;
+            X_LvNG{s}(i,2*numSessions + 2*thisSite - 0) = cfn(l(s).data.contrast_cond(i,1));
+            
+            X_RvNG{s}(i,2*numSessions + 2*thisSite - 1) = 1;
+            X_RvNG{s}(i,2*numSessions + 2*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
         end
     end
-    
+       
     opts=struct;
-        opts.intr=0; %don't add a global intercept
-%     opts.intr=1;
-    % opts.alpha=1; %lasso regularisation (L1)
-    %     opts.alpha=0; %ridge (L2)
-%     opts.alpha=0.5; %elasticnet (both)
+    opts.intr=1; %global intercept
     
-    % penalty = ones(1,size(X,2)); penalty(1:3:end)=0;
-    % opts.penalty_factor=penalty; %Try penalising only the contrast terms
-        fit=cvglmnet(X{s},Y{s},'multinomial',glmnetSet(opts));
-%     fit=glmnet(X{s},Y{s},'multinomial',glmnetSet(opts));
-    %     cvglmnetPlot(fit);
-        b=cvglmnetCoef(fit,0.001);
-%     b=glmnetCoef(fit,0.01);
-    
-        disp([expRefs{s,1} ' cv lambda min: ' num2str(fit.lambda_min)]);
+    fit=cvglmnet(X{s},Y{s},'multinomial',glmnetSet(opts));
+    b=cvglmnetCoef(fit,0);
+    disp([expRefs{s,1} ' cv lambda min: ' num2str(fit.lambda_min)]);
     b=[b{1}-b{3} b{2}-b{3}];
     b(1,:) = [];
     
@@ -140,6 +162,31 @@ for s = 1:numSubjects
     sites(s).CLeft = sitesP(2:3:end,:);
     sites(s).CRight = sitesP(3:3:end,:);
     sites(s).laserSite = l(s).inactivationSite;
+    
+    %     
+%     %Also try separate LvNG and RvNG fitting
+    %Remove irrelevant trials for the LvNG and RvNG matrices (for separate
+    %fitting method)
+    Y_LvNG{s} = Y{s}(Y{s}~=2); Y_LvNG{s}(Y_LvNG{s}==3)=0; %recode NOGO to be 0
+    Y_RvNG{s} = Y{s}(Y{s}~=1); Y_RvNG{s}(Y_RvNG{s}==3)=0; Y_RvNG{s}(Y_RvNG{s}==2)=1;
+    X_LvNG{s}(Y{s}==2,:) = [];
+    X_RvNG{s}(Y{s}==1,:) = [];
+
+    b2=[];
+    fit=glmnet(X_LvNG{s}, Y_LvNG{s}, 'binomial',glmnetSet(opts));
+    b2(:,1)=glmnetCoef(fit,0.001);
+    fit=glmnet(X_RvNG{s}, Y_RvNG{s}, 'binomial',glmnetSet(opts));
+    b2(:,2)=glmnetCoef(fit,0.001);
+    b2(1,:) = [];
+    
+    sessionP2 = b2(1:2*numSessions,:);
+    sess2(s).Bias = sessionP2(1:2:end,:);
+    sess2(s).Sens = sessionP2(2:2:end,:);
+    
+    sitesP2 = b2(2*numSessions+1:end,:);
+    sites2(s).Bias = sitesP2(1:2:end,:);
+    sites2(s).Sens = sitesP2(2:2:end,:);
+    sites2(s).laserSite = l(s).inactivationSite;
     
     % plot design matrix and repetitions per site
     %     figure('name',expRefs{s,1});
@@ -179,7 +226,8 @@ for s = 1:numSubjects
     XnL = X{s}(nonL_idx,:);
     YnL = Y{s}(nonL_idx);
     fit1=cvglmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
-    
+    disp([expRefs{s,1} ' nonLaser fit lambda min: ' num2str(fit1.lambda_min)]);
+
     %pull out parameter fits
     b=cvglmnetCoef(fit1);
     b=[b{1}-b{3} b{2}-b{3}];
@@ -194,7 +242,8 @@ for s = 1:numSubjects
     twoStageFitOpts.intr = 0;
     twoStageFitOpts.offset = cvglmnetPredict(fit1,XL(:,1:(3*numSessions)),[],'link');
     fit2=cvglmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
-    
+    disp([expRefs{s,1} ' Laser fit lambda min: ' num2str(fit2.lambda_min)]);
+
     %pull out parameter fits
     b=cvglmnetCoef(fit2);
     b=[b{1}-b{3} b{2}-b{3}];
@@ -267,12 +316,60 @@ for s = 1:numSubjects
             title(['Laser effect ' side{lr} ' ' labels{d}])
             xlim([-5 5]);
             a=a+1;
+            set(gca,'xtick','','ytick','');
+        set(gca,'box','off','XColor','w','YColor','w');
         end
     end
     %
     cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
         linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
     colormap(cmap);
+    
+    set(gcf,'Color','w');
+end
+
+%% LASER EFFECT MAP: LvsNG and RvsNG maps CONDENSED OVER SUBJECTS (USING NON-CROSS MODEL!)
+figure;
+for s = 1:numSubjects
+    labels = {'bias','CL sensitivity','CR sensitivity'};
+
+    dotSize=150;
+    dotShape='o';
+    kimg=imread('D:\kirkcaldie_brain_BW.PNG');
+    
+    subplot(4,numSubjects,s);
+    imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal'); set(imX,'alphadata',0.7);
+    hold on;
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,sites2(s).Bias(:,1),dotShape,'filled'); axis equal; colorbar;
+    axis([-5 5 -6 4]); set(gca,'box','off','Xtick','','YTick',''); if s==1; set(gca,'YColor','k'); ylabel('Bias LvNG'); end;
+    title(expRefs{s,1}); caxis([-1 1]*max(abs(sites(s).Biases(:,1))));
+    
+    subplot(4,numSubjects,s+numSubjects);
+    imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal'); set(imX,'alphadata',0.7);
+    hold on;
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,sites2(s).Bias(:,2),dotShape,'filled'); axis equal; colorbar;
+    axis([-5 5 -6 4]); set(gca,'box','off','Xtick','','YTick',''); if s==1; set(gca,'YColor','k'); ylabel('Bias RvNG'); end;
+    caxis([-1 1]*max(abs(sites(s).Biases(:,2))));
+    
+    subplot(4,numSubjects,s+2*numSubjects);
+    imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal'); set(imX,'alphadata',0.7);
+    hold on;
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,sites2(s).Sens(:,1),dotShape,'filled'); axis equal; colorbar;
+    axis([-5 5 -6 4]); set(gca,'box','off','Xtick','','YTick',''); if s==1; set(gca,'YColor','k'); ylabel('Sens CL (LvNG)'); end;
+    caxis([-1 1]*max(abs(sites(s).CLeft(:,1))));
+    
+        subplot(4,numSubjects,s+3*numSubjects);
+    imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal'); set(imX,'alphadata',0.7);
+    hold on;
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,sites2(s).Sens(:,2),dotShape,'filled'); axis equal; colorbar;
+    axis([-5 5 -6 4]); set(gca,'box','off','Xtick','','YTick',''); if s==1; set(gca,'YColor','k'); ylabel('Sens CR (RvNG)'); end;
+    caxis([-1 1]*max(abs(sites(s).CRight(:,2))));
+    
+    cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+    colormap(cmap);
+    
+    set(gcf,'Color','w');
 end
 
 %% LASER EFFECT MAP: LvsR and GOvsNG maps
@@ -322,78 +419,150 @@ end
 %% LASER EFFECT MAP: performance effects of the laser (no model)
 figure;
 kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
-
+clear PD;
 for s = 1:numSubjects
-    subplot(numSubjects,1,s);
+    subplot(1,numSubjects+1,s);
     imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
     set(imX,'alphadata',0.7);
     hold on;
     
     PF = pivottable(l(s).data.laserIdx,[],l(s).data.feedbackType==1,'mean');
-    PF = PF(2:end)-PF(1);
-    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),150,PF,'o','filled'); axis equal; colorbar;
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),150,PF(2:end),'s','filled'); axis equal; colorbar;
     ylim([-6 4]);
-    
-    pcntl = quantile(PF,[0.05 0.95]);
-    
-    caxis([-1 1]*max(abs(pcntl)));
+    cax = PF(1) + [-1 1]*max(abs(PF(2:end)-PF(1)));
+    PD(:,s)=PF(2:end)-PF(1);
+%     cax(cax>1)=1;
+    caxis(cax);
     hold off;
     title(expRefs{s,1})
     xlim([-5 5]);
     
-    cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+    cmap = [ linspace(0,1,100)' ones(100,1) linspace(0,1,100)';
         linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
-    colormap(cmap);
-end
-
-%% LASER EFFECT MAP: reaction time effects and lick effects (no model)
-for s = 1:numSubjects
-    PF = pivottable(l(s).data.laserIdx,[],l(s).data.feedbackType==1,'mean');
-    PF = PF(2:end)-PF(1);
-    PF = [PF nan(length(PF),1)];
+    colormap(flipud(cmap));
     
+    set(gca,'xtick','','ytick','');
+    set(gca,'box','off','XColor','w','YColor','w');
+    
+end
+% 
+% subplot(1,numSubjects+1,s+1);
+% imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+% set(imX,'alphadata',0.7);
+% hold on;
+% scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),150,median(PD,2),'s','filled'); axis equal; colorbar;
+% ylim([-6 4]);
+% caxis([-1 1]*max(abs(median(PD,2))));
+% hold off;
+% title('Median')
+% xlim([-5 5]);
+
+cmap = [ linspace(0,1,100)' ones(100,1) linspace(0,1,100)';
+    linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+colormap(flipud(cmap));
+
+set(gca,'xtick','','ytick','');
+set(gca,'box','off','XColor','w','YColor','w');
+
+set(gcf,'Color','w');
+
+%% LASER EFFECT MAP: pupil effects of the laser (no model)
+figure;
+kimg=imread('\\basket.cortexlab.net\home\stuff\kirkcaldie_brain_BW.PNG');
+clear PD;
+for s = 1:numSubjects
+    subplot(1,numSubjects+1,s);
+    imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+    set(imX,'alphadata',0.7);
+    hold on;
+    
+    PF = pivottable(l(s).data.laserIdx,[],l(s).data.pupilenergy,'nanmean');
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),150,PF(2:end),'s','filled'); axis equal; colorbar;
+    ylim([-6 4]);
+    cax = PF(1) + [-1 1]*max(abs(PF(2:end)-PF(1)));
+    PD(:,s)=PF(2:end)-PF(1);
+%     cax(cax>1)=1;
+    caxis(cax);
+    hold off;
+    title(expRefs{s,1})
+    xlim([-5 5]);
+    
+    cmap = [ linspace(0,1,100)' ones(100,1) linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+    colormap(flipud(cmap));
+    
+    set(gca,'xtick','','ytick','');
+    set(gca,'box','off','XColor','w','YColor','w');
+    
+end
+% 
+% subplot(1,numSubjects+1,s+1);
+% imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+% set(imX,'alphadata',0.7);
+% hold on;
+% scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),150,median(PD,2),'s','filled'); axis equal; colorbar;
+% ylim([-6 4]);
+% caxis([-1 1]*max(abs(median(PD,2))));
+% hold off;
+% title('Median')
+% xlim([-5 5]);
+
+cmap = [ linspace(0,1,100)' ones(100,1) linspace(0,1,100)';
+    linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+colormap(flipud(cmap));
+
+set(gca,'xtick','','ytick','');
+set(gca,'box','off','XColor','w','YColor','w');
+
+set(gcf,'Color','w');
+
+%% LASER EFFECT MAP: reaction time effects (no model)
+figure;
+for s = 1:numSubjects
+%     PF = pivottable(l(s).data.laserIdx,[],l(s).data.feedbackType==1,'mean');
+%     PF = PF(2:end)-PF(1);
+%     PF = [PF nan(length(PF),1)];
+%     
     RTs = pivottable(l(s).data.laserIdx,l(s).data.response,l(s).data.RT,'median');
-    RTs = bsxfun(@minus,RTs(2:end,:),RTs(1,:));
+%     RTs = bsxfun(@minus,RTs(2:end,:),RTs(1,:));
     RTs = RTs(:,1:2);
     
 %     Ls = pivottable(l(s).data.laserIdx,l(s).data.response,l(s).data.lickenergy,'median');
 %     Ls = bsxfun(@minus,Ls(2:end,:),Ls(1,:));
 %     Ls = Ls(:,1:2);
 %     
-    toDisplay = {RTs,PF};%, sitesP_CLeft, sitesP_CRight};
-    labels = {'RT^{median} - noLaser RT^{median}','perf^{median} - noLaser perf^{median}'};
-    
     dotSize=150;
-    dotShape='o';
+    dotShape='s';
     kimg=imread('D:\kirkcaldie_brain_BW.PNG');
     
     a=1;
-    figure('name',expRefs{s,1});
+    
     side={'left choices','right choices'};
-    for d = 1:length(toDisplay)
-        for lr=1:2
-            subplot(length(toDisplay),2,a);
-            imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
-            set(imX,'alphadata',0.7);
-            hold on;
-            scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,toDisplay{d}(:,lr),dotShape,'filled'); axis equal; colorbar;
-            ylim([-6 4]);
-            
-            pcntl = quantile(toDisplay{d}(:),[0.05 0.95]);
-            
-            caxis([-1 1]*max(abs(pcntl)));
-            %         set(s(lr),'markeredgecolor',[1 1 1]*1,'linewidth',0);
-            hold off;
-            title([side{lr} ' ' labels{d}])
-            xlim([-5 5]);
-            a=a+1;
-        end
+    for lr=1:2
+        subplot(2,numSubjects,s + (lr-1)*numSubjects);
+        imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+        set(imX,'alphadata',0.7);
+        hold on;
+        scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),dotSize,RTs(2:end,lr),dotShape,'filled'); axis equal; colorbar;
+        ylim([-6 4]);
+        
+        cax = RTs(1,lr) + [-1 1]*max(abs(RTs(2:end,lr)-RTs(1,lr)));
+        caxis(cax);
+        
+        %         set(s(lr),'markeredgecolor',[1 1 1]*1,'linewidth',0);
+        hold off;
+        title(expRefs{s,1});
+        xlim([-5 5]);
+        a=a+1;
+        set(gca,'xtick','','ytick','');
+        set(gca,'box','off','XColor','w','YColor','w');
     end
     %
-    cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+    cmap = [ linspace(0,1,100)' ones(100,1) linspace(0,1,100)';
         linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
-    colormap(cmap);
+    colormap(flipud(cmap));
 end
+set(gcf,'Color','w');
 
 %% RELIABILITY: Split half reliability
 for s = 1:numSubjects
@@ -463,10 +632,13 @@ end
 %the fit can give an indication of the null distribution under this
 %behavioural model.
 Qshuffle = struct;
-proportion = 0.1;
+% proportion = 0.1;
 NUM_SHUFFLES = 200;
-figure('name',num2str(lambda_laserTrials));
+figure;
 for s = 1:numSubjects
+    tab = tabulate(l(s).data.laserIdx);
+    proportion = mean(tab(2:end,3))/100;
+    
     numSessions = length(expRefs{s,2});
     nonL_idx = l(s).data.laserIdx==0;
     for shuff = 1:NUM_SHUFFLES
@@ -485,35 +657,39 @@ for s = 1:numSubjects
             QX(trial,3) = cfn(c(2));
         end
                
-% %         %one stage fitting
+%         %one stage fitting
 %         fit=glmnet([X{s} QX],Y{s},'multinomial',glmnetSet(opts));
-%         b=glmnetCoef(fit,0.01);
+%         b=glmnetCoef(fit,0);
 %         b=[b{1}-b{3} b{2}-b{3}];
 %         b(1,:) = [];
-% 
+        %
         %two stage fitting
         twoStageFitOpts = struct;
         twoStageFitOpts.intr = 1;
 
         %First fit non-laser portion of data
-        XnL = X{s}(l(s).data.laserIdx==0 & QX(:,1)==0,:);        
+        XnL = X{s}(l(s).data.laserIdx==0 & QX(:,1)==0,:);
         YnL = Y{s}(l(s).data.laserIdx==0 & QX(:,1)==0);
-        fit=cvglmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
-% 
-%         % %Then fit laser portion of data, using nonLaser params as offsets
+%         fit=glmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
+                fit=cvglmnet(XnL(:,1:(3*numSessions)),YnL,'multinomial',glmnetSet(twoStageFitOpts));
+
+        %         % %Then fit laser portion of data, using nonLaser params as offsets
         XL = [X{s} QX];
         XL = XL(l(s).data.laserIdx>0 | QX(:,1)==1,:);
         YL = Y{s}(l(s).data.laserIdx>0 | QX(:,1)==1);
         twoStageFitOpts.intr = 0;
-        twoStageFitOpts.offset = cvglmnetPredict(fit,XL(:,1:(3*numSessions)),[],'link');
-        fit2=cvglmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
-% 
-%         %pull out parameter fits
-        b=cvglmnetCoef(fit2);
+%         twoStageFitOpts.offset = glmnetPredict(fit,XL(:,1:(3*numSessions)),0,'link');
+%         fit2=glmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
+                        twoStageFitOpts.offset = cvglmnetPredict(fit,XL(:,1:(3*numSessions)),[],'link');
+                fit2=cvglmnet(XL(:,((3*numSessions)+1):end),YL,'multinomial',glmnetSet(twoStageFitOpts));
+        %
+        %         %pull out parameter fits
+        %         b=cvglmnetCoef(fit2,0);
+        b=glmnetCoef(fit2,[]);
         b=[b{1}-b{3} b{2}-b{3}];
-        b(1,:) = [];        
-        
-       
+        b(1,:) = [];
+
+
         Qshuffle(s).Bias(shuff,:) = b(end-2,:);
         Qshuffle(s).CLeft(shuff,:) = b(end-1,:);
         Qshuffle(s).CRight(shuff,:) = b(end,:);
@@ -543,7 +719,7 @@ for s = 1:numSubjects
     
 end
 
-%% Check whether model is fitting well on non-laser trials
+%% Check whether model is fitting well on non-laser trials %NEED TO ADD GLOBAL INTERCEPT
 g = g.setModel('C50');
 for s = 1:numSubjects
     figure('name',expRefs{s,1});
@@ -590,7 +766,7 @@ for s = 1:numSubjects
     set(ax(1),'Xticklabel',{'L','NG','R'},'xtick',1:3);
 end
 
-%% Check whether model is fitting well on laser trials
+%% Check whether model is fitting well on laser trials %NEED TO ADD GLOBAL INTERCEPT
 g = g.setModel('C50');
 figure;
 for s = 1:numSubjects
@@ -657,12 +833,12 @@ for s = 1:numSubjects
         subplot(numSubjects,4,4*s - 4 + stim_type);
         scatter(coords(:,2),coords(:,1),dotSize,nanmean(actual(:,stim_type,1,:),4),'s','filled'); caxis([0 1]);
         hold on;
-        scatter(coords(:,2)+5,coords(:,1),dotSize,nanmean(actual(:,stim_type,3,:),4),'s','filled');caxis([0 1]);
-        scatter(coords(:,2)+10,coords(:,1),dotSize,nanmean(actual(:,stim_type,2,:),4),'s','filled');caxis([0 1]);
+        scatter(coords(:,2)+10,coords(:,1),dotSize,nanmean(actual(:,stim_type,3,:),4),'s','filled');caxis([0 1]);
+        scatter(coords(:,2)+20,coords(:,1),dotSize,nanmean(actual(:,stim_type,2,:),4),'s','filled');caxis([0 1]);
         
         scatter(coords(:,2),coords(:,1)-12,dotSize,nanmean(pred(:,stim_type,1,:),4),'s','filled'); caxis([0 1]);
-        scatter(coords(:,2)+5,coords(:,1)-12,dotSize,nanmean(pred(:,stim_type,3,:),4),'s','filled'); caxis([0 1]);
-        scatter(coords(:,2)+10,coords(:,1)-12,dotSize,nanmean(pred(:,stim_type,2,:),4),'s','filled'); caxis([0 1]);
+        scatter(coords(:,2)+10,coords(:,1)-12,dotSize,nanmean(pred(:,stim_type,3,:),4),'s','filled'); caxis([0 1]);
+        scatter(coords(:,2)+20,coords(:,1)-12,dotSize,nanmean(pred(:,stim_type,2,:),4),'s','filled'); caxis([0 1]);
         
         hold off
 %         xlim([0 14]); 
@@ -688,39 +864,43 @@ end
 %in the model output
 numiter = 100;
 stim_labels = {'C=0','CL=CR','C=L','C=R'};
-
 for s = 1:numSubjects
-    D = l(s).data;
-    numSessions = length(expRefs{s,2});
-    Xb = X{s};
-    Yb = Y{s};
+    D = getrow(l(s).data,l(s).data.laserIdx==0);
+    XnL = X{s}(l(s).data.laserIdx==0,1:(3*numSessions));
+    YnL = Y{s}(l(s).data.laserIdx==0);
+    
+    numSessions = max(D.sessionID);
+   
     bootstrap = struct;
     
     model_output = nan(numiter,3,4,numSessions);
     for iter = 1:numiter
-
+        disp(iter);
+        
+        Xb = XnL;
+        Yb = YnL;
         for session = 1:numSessions
             sidx = D.sessionID==session;
             ridx = randsample(find(sidx),sum(sidx),true);
-            Xb(sidx,:) = X{s}(ridx,:);
-            Yb(sidx) = Y{s}(ridx);
+            Xb(sidx,:) = XnL(ridx,:);
+            Yb(sidx) = YnL(ridx);
         end
+%         imagesc(Xb);
         
         %fit
         fit=glmnet(Xb,Yb,'multinomial',glmnetSet(opts));
-        b=glmnetCoef(fit,0.01);
+        b=glmnetCoef(fit,0);
         b=[b{1}-b{3} b{2}-b{3}];
         b(1,:) = [];
         
-        sessionP_b = b(1:3*numSessions,:);
-        bootstrap.Biases(:,:,iter) = sessionP_b(1:3:end,:);
-        bootstrap.CLeft(:,:,iter) = sessionP_b(2:3:end,:);
-        bootstrap.CRight(:,:,iter) = sessionP_b(3:3:end,:);
+        bootstrap.Biases(:,:,iter) = b(1:3:end,:);
+        bootstrap.CLeft(:,:,iter) = b(2:3:end,:);
+        bootstrap.CRight(:,:,iter) = b(3:3:end,:);
         
         %model output
-        D.y_hat = glmnetPredict(fit,X{s},0.01,'response');
+        D.y_hat = glmnetPredict(fit,XnL,0,'response');
         for session = 1:numSessions
-            E = getrow(D,D.laserIdx==0 & D.sessionID==session);
+            E = getrow(D,D.sessionID==session);
             stim = cell(1,4);
             stim{1} = sum(E.contrast_cond,2)==0;
             stim{2} = ~stim{1} & (E.contrast_cond(:,1)==E.contrast_cond(:,2));
@@ -734,16 +914,54 @@ for s = 1:numSubjects
         end
     end
     
-%     biases = permute(bootstrap.Biases,[3 2 1]);
-%     sensL = permute(bootstrap.CLeft,[3 2 1]);
-%     sensR = permute(bootstrap.CRight,[3 2 1]);
-%     labels = {'b_{LvNG}','sL_{LvNG}','sR_{LvNG}','sR_{RvNG}','sL_{RvNG}','b_{RvNG}'};
-%     for session = 1:numSessions
-%         figure('name',[expRefs{s,1} ' session ' num2str(session)]);
-%         gplotmatrix([biases(:,1,session) sensL(:,1,session) sensR(:,1,session) sensR(:,2,session) sensL(:,2,session) biases(:,2,session)],[],[],'b','.',5,'on','none',labels);
-%     end
+    biases = permute(bootstrap.Biases,[3 2 1]);
+    sensL = permute(bootstrap.CLeft,[3 2 1]);
+    sensR = permute(bootstrap.CRight,[3 2 1]);
+
+        %reparameterise the parameters at lambda=0
+    splus = (sensL + sensR)/2;
+    sminus = (sensL - sensR)/2;
+    czero = -biases./splus;
+    
+    labels_old = {'b_{LvNG}','sL_{LvNG}','sR_{LvNG}','sR_{RvNG}','sL_{RvNG}','b_{RvNG}'};
+    labels_new = {'czero_{LvNG}','splus_{LvNG}','sminus_{LvNG}','sminus_{RvNG}','splus_{RvNG}','czero_{RvNG}'};
     
     figure('name',expRefs{s,1});
+    for session = 1:numSessions
+        old_params = [biases(:,1,session) sensL(:,1,session) sensR(:,1,session) sensR(:,2,session) sensL(:,2,session) biases(:,2,session)];
+        new_params = [czero(:,1,session) splus(:,1,session) sminus(:,1,session) sminus(:,2,session) splus(:,2,session) czero(:,2,session)];
+        
+        subplot(2,numSessions,session);
+        imagesc(corrcoef(old_params));
+        if session == 1
+            set(gca,'XTickLabel',labels_old,'Xtick',1:6,'YTickLabel',labels_old,'Ytick',1:6,'XTickLabelRotation',90,'fontsize',9);
+            title('old parameterisation');
+        else
+            set(gca,'XTickLabel','','YTickLabel','');
+        end
+        axis square; caxis([-1 1]);
+        subplot(2,numSessions,session + numSessions);
+        imagesc(corrcoef(new_params));
+       if session == 1
+            set(gca,'XTickLabel',labels_new,'Xtick',1:6,'YTickLabel',labels_new,'Ytick',1:6,'XTickLabelRotation',90,'fontsize',9);
+            title('new parameterisation');
+        else
+            set(gca,'XTickLabel','','YTickLabel','');
+        end
+        axis square;caxis([-1 1]);
+        
+cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+    colormap(cmap);
+%         figure('name',[expRefs{s,1} ' session ' num2str(session) ' CONVENTIONAL PARAMETERS']);
+%         gplotmatrix([biases(:,1,session) sensL(:,1,session) sensR(:,1,session) sensR(:,2,session) sensL(:,2,session) biases(:,2,session)],[],[],'b','.',5,'on','none',labels_old);
+%         
+%         figure('name',[expRefs{s,1} ' session ' num2str(session) ' NEW PARAMETERS']);
+%         gplotmatrix([czero(:,1,session) splus(:,1,session) sminus(:,1,session) sminus(:,2,session) splus(:,2,session) czero(:,2,session)],[],[],'b','.',5,'on','none',labels_new);
+%         drawnow;
+    end
+    
+    f=figure('name',expRefs{s,1});
     for session = 1:numSessions 
         for stim_type = 1:4
             subplot(numSessions,4,4*session - 4 + stim_type);
@@ -754,13 +972,13 @@ for s = 1:numSubjects
             end
         end
     end
-    ax=get(gcf,'children');
+    ax=get(f,'children');
     set(ax,'Xticklabel','','Yticklabel','','box','off');
     set(ax(1),'XTickLabel',{'pL','pR','pNG'});
     ylabel(ax(1),'probability');
 end
 
-%% LASER EFFECT MAP: psychometric curves)
+%% LASER EFFECT MAP: psychometric curves) %NEED TO ADD GLOBAL INTERCEPT
 % Only possible for 1D contrast trials since the contrast can be projected
 % onto 1 axis.
 labels = {'Choose L','Choose R','NG'};
@@ -906,7 +1124,8 @@ for s = 1:numSubjects
     guess_bpt = sum(tab.*log2(tab));
     
     cv_gof(s,:) = mean(log2(p_hats))-guess_bpt;
-end; disp('done');
+end 
+disp('done');
 
 bar(cv_gof); ylabel('loglik [bits] relative to guessing @~-1.5');
 set(gca,'XTickLabel',expRefs(:,1),'xtick',1:numSubjects);
@@ -962,4 +1181,97 @@ for s = 1:numSubjects
         set(gca,'ydir','normal'); xlabel('CR'); ylabel('CL'); colorbar; axis square
         title([expRefs{s,1} ' chose ' labels{resp}]);
     end
+end
+
+%% MISC: Plot a table of contrast stimulus settings
+p = load(dat.expFilePath(expRefs{end,2}{end},'parameters','m'));
+p = p.parameters;
+counts = p.numRepeats(p.rewardOnStimulus(2,:)==1.1);
+c = p.visCueContrast(:,p.rewardOnStimulus(2,:)==1.1);
+
+uC = unique(c(:));
+for cl = 1:length(uC)
+    for cr = 1:length(uC)
+        T(cl,cr)=sum(counts(c(1,:) == uC(cl) & c(2,:) == uC(cr)));
+    end
+end
+
+imagesc(uC,uC,T); set(gca,'ydir','normal','box','off'); xlabel('CR'); ylabel('CL'); 
+set(gcf,'Color','w');
+
+%% (NO GLM) Test IIA assumption in data
+% figure;
+for s = 1:numSubjects
+    numSessions = max(l(s).data.sessionID);
+    
+    figure('name',expRefs{s,1});
+    pratios=[];
+    %     for se = 1:numSessions
+    uC = unique(l(s).data.contrast_cond(:));
+    %         D = getrow(l(s).data,l(s).data.sessionID==se & l(s).data.laserIdx==0);
+    D = getrow(l(s).data,l(s).data.laserIdx==0);
+    
+    for relC = 1:length(uC)
+        %             ax(se)=subplot(numSessions,length(uC),length(uC)*(se-1) + relC );
+        ax(relC)=subplot(length(uC),1,relC);
+        
+        for c=1:length(uC)
+            %test pL/pNG over different right contrasts
+            r=D.response(D.contrast_cond(:,2)==uC(c) & D.contrast_cond(:,1)==uC(relC));
+            pratios(c,1,se) = sum(r==1)/sum(r==3);
+            
+            %test pR/pNG over different left contrasts
+            r=D.response(D.contrast_cond(:,1)==uC(c) & D.contrast_cond(:,2)==uC(relC));
+            pratios(c,2,se) = sum(r==2)/sum(r==3);
+        end
+        plot(uC,log(pratios(:,:,se)));  xlim([0 .6]);
+        set(gca,'box','off');
+        
+        if relC == length(uC)
+            xlabel('Contrast of irrelevant alternative');
+            ylabel('log odds'); legend('ln[pL/pNG]','ln[pR/pNG]');
+        end
+        
+        if relC ~= length(uC)
+            set(gca,'XTickLabel','','XColor','w');
+        end
+        
+        title(['Relevant contrast: ' num2str(uC(relC))]);
+    end
+    
+    %         if se == 1
+    %             title(expRefs{s,1});
+    %         end
+    %     end
+    set(gcf,'Color','w');
+    %     set(ax,'XColor','w');
+    %     linkaxes(ax,'x');
+end
+
+%% Crossval
+figure;
+for s = 1:numSubjects
+   numSessions =  max(l(s).data.sessionID);
+   subplot(1,numSubjects,s);
+   
+   ll = [];
+   for se = 1:numSessions
+       D = getrow(l(s).data,l(s).data.laserIdx==12 & l(s).data.sessionID==se);
+       g = GLM(D);
+       
+       g.regularise = @(b)0.001*sum(b.^2);
+       
+       ll(se,1) = mean(log2(g.setModel('C50-subset').fitCV(5).p_hat)) - g.guess_bpt;
+       ll(se,2) = mean(log2(g.setModel('C50').fitCV(5).p_hat)) - g.guess_bpt;
+   end
+   
+   bar(ll','stacked'); set(gca,'box','off','XTickLabel',{'C50-subset','C50'},'XTick',[1 2]);
+ 
+   title(expRefs{s,1});
+   
+   if s==1
+       ylabel('log_2 likelihood relative to guessing [sum over sessions]');
+   end
+   
+   set(gcf,'Color','w'); colormap gray;
 end
