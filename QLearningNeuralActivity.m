@@ -15,7 +15,7 @@ nonDA_expRefs = {'2015-01-16_1_SS031_DA';
 %all DA sessions
 w_end = nan(4,length(nonDA_expRefs));
 for b = 1:length(nonDA_expRefs)
-    q = Q(nonDA_expRefs(b)).setModel('aB').fit;
+    q = Q(nonDA_expRefs(b)).setModel('aB+aS').fit;
 
     %get last w values
     w = [q.wt{1};q.wt{2}];
@@ -152,7 +152,7 @@ for n = 1:numNeurons
     legend off; set(gca,'XTickLabel',dqEdges,'XTick',1:length(dqEdges));ylabel('neur align Resp');xlim([0 length(dqEdges)]);
     
     savefig(f,['\\basket.cortexlab.net\home\figures\QGLM\neuron' num2str(n) '.fig']);
-    close all;
+%     close all;
 end
 
 %% plot summary of corr
