@@ -1,5 +1,5 @@
 
-%% Generate demo plot of this
+%% 2AFC simulation + bootstrap estimation
 %Generate data
 
 N = 1000;
@@ -80,9 +80,57 @@ ylabel(psy,'p(y==1)');
 title(psy,[num2str(N) ' trials']);
 set(gcf,'color','w');
 
-%% 2AFC simulation again but using posterior estimation rather than bootstrap
+%% repeat 2AFC simulation + bootstrap estimation to test whether true param falls within 95CI 95% of the time
+%Generate data
 
-N = 600;
+numRepeats = 100;
+numTrials = 500;
+
+D = table;
+D.contrast_cond = [linspace(1,0,numTrials/2)' zeros(numTrials/2,1);
+        zeros(numTrials/2,1) linspace(0,1,numTrials/2)'];
+
+bias = -4;
+sens = 10;
+
+INCI = zeros(numRepeats,2);
+
+for i = 1:numRepeats
+    disp(i);
+    zl = bias + sens*(D.contrast_cond(:,1) - D.contrast_cond(:,2));
+    pL = exp(zl)./(1+exp(zl));
+    D.response = binornd(1,1-pL) + 1;
+
+    
+    numIter = 200;
+    B = nan(numIter,2);
+    for j = 1:numIter
+        d = datasample(D,height(D));
+        
+%         %Fit with mnrfit
+        B(j,:) = mnrfit((d.contrast_cond(:,1) - d.contrast_cond(:,2)),d.response );
+%         
+        %Fit with my code
+%         g = GLM(table2struct(d,'ToScalar',true));
+%         B(j,:) = g.setModel('AFC_diff').fit.parameterFits;
+    end
+    
+    ci = quantile(B(:,1),[0.025 0.975]);
+    if ci(1) < bias && bias < ci(2)
+        INCI(i,1) = 1;
+    end
+    
+    ci = quantile(B(:,2),[0.025 0.975]);
+    if ci(1) < sens && sens < ci(2)
+        INCI(i,2) = 1;
+    end
+end
+
+mean(INCI)
+
+%% 2AFC simulation + bayesian inference
+
+N = 1000;
 
 D = struct;
 D.contrast_cond = [linspace(1,0,N/2)' zeros(N/2,1);
@@ -219,9 +267,9 @@ for bi = 1:length(biases)
     g = GLM(table2struct(D,'ToScalar',true));
     param_est = g.setModel('C-subset').fit.parameterFits;
     
-    plot(psyL,diff(D.contrast_cond,[],2),pL,'.-');
-    plot(psyNG,diff(D.contrast_cond,[],2),pNG,'.-');
-    plot(psyR,diff(D.contrast_cond,[],2),pR,'.-');
+    plot(psyL,diff(D.contrast_cond,[],2),pL,'.-');ylim([0 1]);
+    plot(psyNG,diff(D.contrast_cond,[],2),pNG,'.-');ylim([0 1]);
+    plot(psyR,diff(D.contrast_cond,[],2),pR,'.-');ylim([0 1]);
 
     %Bootstrap resample
     numIter = 100;
@@ -310,4 +358,68 @@ ylabel(psyNG,'pNG');
 ylabel(psyR,'pR');
 set(gcf,'color','w');
 
+%% 2AUC simulations on DETECTION task BAYESIAN INFERENCE
 
+N = 100;
+
+biases = -4:2:4;
+
+f=figure;
+psyL = subplot(3,3,7); hold(psyL,'on');
+psyNG = subplot(3,3,8); hold(psyNG,'on');
+psyR = subplot(3,3,9); hold(psyR,'on');
+cols = get(gca,'ColorOrder');
+
+for bi = 1:length(biases)
+    
+    %Generate data
+    BL = -biases(bi);
+    BR = biases(bi);
+    SL = 10;
+    SR = 10;
+    
+    D = struct;
+    D.contrast_cond = [linspace(1,0,N/2)' zeros(N/2,1);
+        zeros(N/2,1) linspace(0,1,N/2)'];
+       
+    ZL = BL + SL*D.contrast_cond(:,1);
+    ZR = BR + SR*D.contrast_cond(:,2);
+    pL = exp(ZL)./(1+exp(ZL)+exp(ZR));
+    pR = exp(ZR)./(1+exp(ZL)+exp(ZR));
+    pNG = 1./(1+exp(ZL)+exp(ZR));
+    
+    R = mnrnd(1,[pL pR pNG]);
+    [~,D.response]=max(R,[],2);
+    
+    %Fit to entire dataset
+    g = bGLM(D);
+    g = g.setModel('C-subset');
+    g.metHastIter = 10000;
+        
+    figure(f);
+    
+    plot(psyL,diff(D.contrast_cond,[],2),pL,'.-'); ylim([0 1]);
+    plot(psyNG,diff(D.contrast_cond,[],2),pNG,'.-');ylim([0 1]);
+    plot(psyR,diff(D.contrast_cond,[],2),pR,'.-');ylim([0 1]);
+
+    %Bootstrap resample
+    B = g.posterior;
+    
+    % Plot parameter estimates against each other
+    subplot(3,length(biases),bi);
+    imagesc(corrcoef(B)); caxis([-1 1]);
+    set(gca,'xtick',1:size(B,2),'ytick',1:size(B,2),'xticklabels',g.parameterLabels,'yticklabels',g.parameterLabels,'XTickLabelRotation',90);
+   drawnow;
+   
+   figure; gplotmatrix(B);
+   
+end
+
+ylabel(psyL,'pL');
+ylabel(psyNG,'pNG');
+ylabel(psyR,'pR');
+set(gcf,'color','w');
+
+cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+                    linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+            colormap(cmap);
