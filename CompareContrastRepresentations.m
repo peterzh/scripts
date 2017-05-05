@@ -48,3 +48,37 @@ set(gca,'XTickLabel',models)
 %     boxplot(cell2mat(LLs(:,m)),groupings,'plotstyle','compact','sym','r')
 % end
 % linkaxes(h,'y');
+
+
+%% Comparing other kinds of models
+expRefs = {'2016-02-22_1_Whipple','2016-02-25_1_Morgan','2016-02-19_1_Spemann'};
+expRefs = dat.listExps('Spemann');
+models = {'Offset','C50-subset','C50-subset-sharedS'};
+
+LLs = nan(length(expRefs),length(models));
+for b = 1:length(expRefs)
+    disp(['File: ' expRefs{b}]);
+    %     g = GLM(expRefs{b});
+    try
+        g = GLM(expRefs{b});
+        if length(g.data.response)<150
+            error('not enough data');
+        end
+        for m = 1:length(models)
+            g1 = g.setModel(models{m}).fitCV(10);
+            LLs(b,m) = mean(log2(g1.p_hat));
+        end
+    catch
+    end
+end
+% LLs(isnan(LLs(:,1)),:)=[];
+
+figure;
+notBoxPlot(LLs);
+% bar(LLs','stacked');
+set(gca,'XTickLabel',models);
+
+ylabel('log_2 likelihood');
+xlabel('Model');
+
+colormap(gray);

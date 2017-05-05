@@ -86,33 +86,44 @@ for s = 1:length(subjects)
             
             c = diff(D.contrast_cond,[],2);
             cVals = unique(c);
-            rts = []; g = []; m = nan(length(cVals),1);
-            lq = nan(length(cVals),1); 
-            uq = nan(length(cVals),1);
+            rts = []; g = []; 
+%             m = nan(length(cVals),1);
+%             md = nan(size(m));
+            
+%             lq = nan(length(cVals),1); 
+%             uq = nan(length(cVals),1);
             
             for contrast = 1:length(cVals)
                 rt = D.RT(D.response == r & c==cVals(contrast));
                 
                 if length(rt)>5
 %                 if ~isempty(rt)
-                    m(contrast) = mean(rt);
-                    lq(contrast) = quantile(rt,.25);
-                    uq(contrast) = quantile(rt,.75);
+                      m = median(rt);
+                      md = mad(rt,1);
+%                     m(contrast) = median(rt);
+%                     md(contrast) = mad(rt);
+%                     lq(contrast) = quantile(rt,.25);
+%                     uq(contrast) = quantile(rt,.75);
                     
                     jtr_range = 0.03;
                     jtr= -0.5*jtr_range + jtr_range*rand;
-                    line([cVals(contrast),cVals(contrast)]+jtr,[lq(contrast),uq(contrast)]);
-                    plot(cVals(contrast)+jtr,m(contrast),[Col{r} '.']);
+                    line([cVals(contrast),cVals(contrast)]+jtr,[m-md,m+md]);
+                    plot(cVals(contrast)+jtr,m,[Col{r} '.']);
+%                     line([cVals(contrast),cVals(contrast)]+jtr,[lq(contrast),uq(contrast)]);
+%                     plot(cVals(contrast)+jtr,m(contrast),[Col{r} '.']);
                 else
-                    m(contrast) = NaN;
-                    lq(contrast) = NaN;
-                    uq(contrast) = NaN;
+%                     m(contrast) = NaN;
+%                     lq(contrast) = NaN;
+%                     uq(contrast) = NaN;
                     
                 end
 %                 rts = [rts;rt];
 %                 g = [g; ones(length(rt),1)*contrast];
                
             end
+            
+            xlabel('Contrast');
+            ylabel('Median RT +- MAD');
             
 %             plot(cVals,m,[Col{r} '.'],'MarkerSize',10);
 %             plot(cVals,lq,[Col{r} 'v'],'MarkerSize',5);

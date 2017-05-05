@@ -1,134 +1,11 @@
 %% 
 expt = 'sparse_unilateral_2D';
-bilateral_mirror = 0;
-MOREDATA=0;
+o=omnibusLaserGLM(expt);
 
 
-%% Construct + save list of expRefs
-expRefs = {
-    'Spemann',...
-    LaserOmnibusCheckSessions('Spemann',expt);
-    
-    'Murphy',...
-    LaserOmnibusCheckSessions('Murphy',expt);
-    
-%         'Morgan',...
-%         LaserOmnibusCheckSessions('Morgan',expt);
-%     
-    'Whipple',...
-    LaserOmnibusCheckSessions('Whipple',expt)
-    };
-
-save(['\\basket.cortexlab.net\home\omnibus_files\' expt '.mat'],'expRefs');
-disp('done');
-
-%% Load all sessions.
-clear l;
-clear Qshuffle;
-load(['\\basket.cortexlab.net\home\omnibus_files\' expt '.mat']);
-
-
-numSubjects = size(expRefs,1);
-c50_fits = cell(1,size(expRefs,1));
-cn_fits = cell(1,size(expRefs,1));
-
-for s = 1:numSubjects
-    name = expRefs{s,1};
-    
-    %Combine all sessions
-    D=struct;
-    %i=1;
-    
-    figure('name',expRefs{s,1});
-    for session = 1:length(expRefs{s,2})
-        disp([num2str(session) '/' num2str(length(expRefs{s,2}))]);
-        %try
-        d = laserGLM(expRefs{s,2}{session});
-        
-        if MOREDATA==1
-            d = d.addData('lick');
-            d = d.addData('pupil');
-        end
-        
-        d = d.data;
-        d = structfun(@(x)(x(6:(end-14),:)),d,'uni',0); %trim first 5 trials and last 15
-        if length(d.response) < 100
-            error('not enough trials');
-        end
-        
-        e = getrow(d,d.laserIdx==0);
-        g=GLM(e).setModel('C50-subset').fit;
-        %             figure;g.plotFit;
-        c50_fits{s}(session,:) = g.parameterFits(5:6);
-        %             c50sub.n(i) = g.parameterFits(5);
-        %             c50sub.c50(i) = g.parameterFits(6);
-        
-        g=GLM(e).setModel('C^N-subset').fit;
-        cn_fits{s}(session,:) = g.parameterFits(5);
-        
-        %         d.sessionID = ones(length(d.response),1)*s;
-        d.sessionID = ones(length(d.response),1)*session;
-        %i=i+1;
-        D = addstruct(D,d);
-        %catch
-        %   warning(eRefs{session});
-        %end
-        
-                
-        cVal = unique(d.contrast_cond(:));
-        prop=nan(length(cVal),length(cVal),3);
-        
-        for cl = 1:length(cVal)
-            for cr = 1:length(cVal)
-                r = d.response(d.contrast_cond(:,1) == cVal(cl) & d.contrast_cond(:,2) == cVal(cr) & d.laserIdx==0);
-                for i=1:3
-                    prop(cl,cr,i) = sum(r==i)/length(r);
-                end
-            end
-        end
-        
-        titles = {'p( Left | c)','p( Right | c)','p( NoGo | c)'};
-        for i=1:3
-            subplot(length(expRefs{s,2}),3,3*session - 3 + i);
-            
-            imagesc(cVal,cVal,prop(:,:,i),[0 1]);
-            set(gca,'YDir','normal','box','off');
-            
-            %                         xlabel('Contrast right');
-            %                         ylabel('Contrast left');
-%             title(titles{i});
-            axis square;
-            set(gca,'XTick','','YTick','','XColor','w','YColor','w');
-            if i > 1
-                set(gca,'XTick','','ytick','');
-            end
-            
-%             if i == 1
-%                 %                                 xlabel('Contrast right');
-%                 ylabel('Contrast left');
-%             end
-        end
-    end
-    
-    set(gcf,'color','w');
-    % figure; subplot(1,2,1); hist(c50sub.n); xlabel('n');
-    % subplot(1,2,2); hist(c50sub.c50); xlabel('c50');
-    D = rmfield(D,'laserIdx');
-    D = getrow(D,D.repeatNum==1);
-    l(s) = laserGLM(D);
-    % save('C:\Users\Peter\Desktop\scripts\LaserOmnibus_data.mat', 'l');
-end
-
-% Fix all C50 and N, and ^N parameters constant for each mouse
-c50_fits=cellfun(@(a)(repmat(mean(a,1),size(a,1),1)),c50_fits,'uni',0);
-cn_fits=cellfun(@(a)(repmat(mean(a,1),size(a,1),1)),cn_fits,'uni',0);
-
-%% Define and fit model
+%% Define GLM 
 sites = struct('Biases',{},'CLeft',{},'CRight',{},'laserSite',{});
 sess = struct('Biases',{},'CLeft',{},'CRight',{});
-
-% sites2 = struct('Bias',{},'Sens',{},'laserSite',{});
-% sess2 = struct('Bias',{},'Sens',{});
 
 X = cell(1,numSubjects); X2=cell(1,numSubjects);
 Y = cell(1,numSubjects); Y2=cell(1,numSubjects);
@@ -141,14 +18,9 @@ for s = 1:numSubjects
     numTrials = size(l(s).data.response,1);
     
     Y{s} = l(s).data.response;
-    Y2{s} = Y{s}; Y2{s}(Y2{s}==3)=0; Y2{s}=Y2{s}+1;
     
     %construct design matrix X (for loop for ease of understanding not speed!)
     X{s} = sparse(numTrials,3*numSessions + 3*numSites);
-%     X2{s} = sparse(numTrials,3*numSessions + numSites);
-    X2{s} = sparse(numTrials,3 + numSites);
-%     X_LvNG{s} = sparse(numTrials,2*numSessions + 2*numSites);
-%     X_RvNG{s} = sparse(numTrials,2*numSessions + 2*numSites);
 
     contrast_rep_fcn = @(c,n,c50)((c.^n)/(c.^n + c50^n));
     for i = 1:numTrials
@@ -159,32 +31,46 @@ for s = 1:numSubjects
         X{s}(i,3*thisSession - 1) = cfn(l(s).data.contrast_cond(i,1));
         X{s}(i,3*thisSession - 0) = cfn(l(s).data.contrast_cond(i,2));
         
-%         X2{s}(i,3*thisSession - 2) = 1;
-%         X2{s}(i,3*thisSession - 1) = cfn(l(s).data.contrast_cond(i,1));
-%         X2{s}(i,3*thisSession - 0) = cfn(l(s).data.contrast_cond(i,2));
-%         
-%         if thisSession == 1
-%             X2{s}(i,3*thisSession - 2) = -1;
-%         end
-        
-        X2{s}(i,1) = 1;
-        X2{s}(i,2) = cfn(l(s).data.contrast_cond(i,1));
-        X2{s}(i,3) = cfn(l(s).data.contrast_cond(i,2));
-
         thisSite = l(s).data.laserIdx(i);
         if thisSite ~= 0
             X{s}(i,3*numSessions + 3*thisSite - 2) = 1;
             X{s}(i,3*numSessions + 3*thisSite - 1) = cfn(l(s).data.contrast_cond(i,1));
             X{s}(i,3*numSessions + 3*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
-            
-%             X2{s}(i,3*numSessions + thisSite) = 1;
-            X2{s}(i,3 + thisSite) = 1;
-%             X2{s}(i,3 + 3*thisSite - 1) = cfn(l(s).data.contrast_cond(i,1));
-%             X2{s}(i,3 + 3*thisSite - 0) = cfn(l(s).data.contrast_cond(i,2));
-
         end
     end
        
+    % plot design matrix and repetitions per site
+    %     figure('name',expRefs{s,1});
+    subplot(numSubjects,2,2*s-1);
+    imagesc(X{s});
+    hold on;
+    pos=0;
+    for session = 1:numSessions
+        numTr = sum(l(s).data.sessionID==session);
+        tx=text(25,pos + 0.5*numTr,[expRefs{s,2}{session} ' n=' num2str(numTr)],'interpreter','none');
+        tx.Color=[1 1 1];
+        pos = pos + numTr;
+    end
+    hold off;
+    title(expRefs{s,1});
+    
+    subplot(numSubjects,2,2*s);
+    tab = tabulate(l(s).data.laserIdx);
+    tab = tab(2:end,2);
+    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),200,tab,'o','filled'); axis equal; colorbar; colormap(gca,'parula')
+    axis([-5 5 -4 3]);
+    % set(s,'markeredgecolor',[0.8 0.8 0.8]);
+    title('Number of trials at each site');
+end
+
+%% fit GLM model
+sites = struct('Biases',{},'CLeft',{},'CRight',{},'laserSite',{});
+sess = struct('Biases',{},'CLeft',{},'CRight',{});
+
+fitMode = 1;
+for s = 1:numSubjects
+    numSessions = max(l(s).data.sessionID);
+    
     opts=struct;
     opts.intr=1; %global intercept
     opts.alpha=1; %lasso L1 penalty
@@ -212,37 +98,17 @@ for s = 1:numSubjects
     sites(s).CLeft = sitesP(2:3:end,:);
     sites(s).CRight = sitesP(3:3:end,:);
     sites(s).laserSite = l(s).inactivationSite;
-    
-    % plot design matrix and repetitions per site
-    %     figure('name',expRefs{s,1});
-    subplot(numSubjects,2,2*s-1);
-    imagesc(X{s});
-    hold on;
-    pos=0;
-    for session = 1:numSessions
-        numTr = sum(l(s).data.sessionID==session);
-        tx=text(25,pos + 0.5*numTr,[expRefs{s,2}{session} ' n=' num2str(numTr)],'interpreter','none');
-        tx.Color=[1 1 1];
-        pos = pos + numTr;
-    end
-    hold off;
-    title(expRefs{s,1});
-    
-    subplot(numSubjects,2,2*s);
-    tab = tabulate(l(s).data.laserIdx);
-    tab = tab(2:end,2);
-    scatter(l(s).inactivationSite(:,2),l(s).inactivationSite(:,1),200,tab,'o','filled'); axis equal; colorbar; colormap(gca,'parula')
-    axis([-5 5 -4 3]);
-    % set(s,'markeredgecolor',[0.8 0.8 0.8]);
-    title('Number of trials at each site');
 end
 
 %% Fit hierarchical logit model instead using mnrfit (no regularisation and reduced model)
 % Overparameterisation is a bigger problem when there is no regularisation
 % and so I reduce the model here to fit a hierarchical model
-mode = 2;
-figure('name',['Mode: ' num2str(mode)]);
+mode =2;
+% figure('name',['Mode: ' num2str(mode)]);
 laserEffect = [];
+
+kimg=imread('D:\kirkcaldie_brain_BW.PNG');
+
 for s = 1:numSubjects
     disp(s);
     numSessions = max(l(s).data.sessionID);
@@ -250,66 +116,155 @@ for s = 1:numSubjects
     
     switch(mode)
         case 1 %Combine all sessions + all laser effects as biasing
-            xh = X2{s};
-            [b,dev,stat]=mnrfit(xh(:,2:end),Y2{s},'model','hierarchical');
+            
+            xh = [];
+            for session = 1:numSessions
+                xh = [xh; X{s}(l(s).data.sessionID==session,3*session-2:3*session)];
+            end
+            xh = [xh X{s}(:,3*numSessions+1 :3: end)];
+            Y2 = Y{s}; Y2(Y2==3)=0; Y2 = Y2+1;
+            
+            [b,dev,stat]=mnrfit(xh(:,2:end),Y2,'model','hierarchical');
             laserEffect(:,:,s) = b(end-numSites+1:end,:);
             
             maxEffect = max(max(abs(laserEffect(:,:,s))));
-            sig = 50*(0.1 + 2*(stat.p(end-numSites+1:end,:)<0.05) + 2*(stat.p(end-numSites+1:end,:)<0.01));
-%             sig = 50*abs(stat.t(end-numSites+1:end,:));
+            sig = 50*(0.4 + 2*(stat.p(end-numSites+1:end,:)<0.05) + 2*(stat.p(end-numSites+1:end,:)<0.01));
+            %             sig = 50*abs(stat.t(end-numSites+1:end,:));
             
         case 2 %Have seperate non-laser session fits + all laser effects as biasing
             xh = [X{s}(:,1:3*numSessions) X{s}(:,3*numSessions+1 :3: end)];
-            [b,dev,stat]=mnrfit(xh(:,2:end),Y2{s},'model','hierarchical');
+            Y2 = Y{s}; Y2(Y2==3)=0;
+            [b,dev,stat]=mnrfit(xh(:,2:end),Y2+1,'model','hierarchical');
             laserEffect(:,:,s) = b(end-numSites+1:end,:);
             
-            maxEffect = max(max(abs(laserEffect(:,:,s))));
-            sig = 50*(0.1 + 2*(stat.p(end-numSites+1:end,:)<0.05) + 2*(stat.p(end-numSites+1:end,:)<0.01));
-%             sig = 50*abs(stat.t(end-numSites+1:end,:));
+            sig = 50*(0.4 + 2*(stat.p(end-numSites+1:end,:)<0.05) + 2*(stat.p(end-numSites+1:end,:)<0.01));
+            %             sig = 50*abs(stat.t(end-numSites+1:end,:));
+            %
+            %             opts=[];
+            %             opts.intr=1;
+            %             fit1 = cvglmnet(X{s}(:,[1:3*numSessions 3*numSessions+1:3:end]),Y{s}==3,'binomial',glmnetSet(opts));%NG vs GO fits
+            %             b = cvglmnetCoef(fit1,0);
+            %             laserEffect(:,1,s) = b(end-numSites+1:end);
+            %
+            %             fit2 = cvglmnet(X{s}(Y{s}<3,[1:3*numSessions 3*numSessions+1:3:end]),Y{s}(Y{s}<3),'binomial',glmnetSet(opts));
+            %             b = cvglmnetCoef(fit2,0);
+            %             laserEffect(:,2,s) = b(end-numSites+1:end);
+            %
+            %             sig = ones(52,2)*50;
             
-        case 3 %Separate non-laser session fits + laser biasing + laser sensitivity effects
-            xh = X{s};
-            [b,dev,stat]=mnrfit(xh(:,2:end),Y2{s},'model','hierarchical');
-            laserEffect(:,:,s,1) = b(3*numSessions + 1:3:end,:);
-%             laserEffect(:,:,s,2) = b(3*numSessions + 2:3:end,:);
-%             laserEffect(:,:,s,3) = b(3*numSessions + 3:3:end,:);
-            sig = 50*(0.1 + 2*(stat.p(3*numSessions + 1:3:end,:)<0.05) + 2*(stat.p(3*numSessions + 1:3:end,:)<0.01));
-%             sig = 50*abs(stat.t(3*numSessions + 1:3:end,:));
-
-
+            disp('Done nested logit non-laser sessions +laser bias');
+            
         otherwise
             error('Not implemented');
     end
     
+    figure('name',expRefs{s,1});
+ 
+    
+    %Plot parameter maps
+    maxEffect = max(abs(laserEffect(:,:,s)));
+    
     ap = l(s).inactivationSite(:,1);
     ml = l(s).inactivationSite(:,2);
-    out = laserEffect;
+    out = laserEffect(:,:,s);
     if bilateral_mirror == 1
         ap = [ap;ap];
         ml = [ml;-ml];
         out = [out;out];
         sig=[sig;sig];
     end
-    
-    
-    subplot(numSubjects,3,3*s-2);
-    scatter(ml,ap,sig(:,1),out(:,1),'s','filled'); axis equal;
-    caxis([-1 1]*maxEffect); ylabel(expRefs{s,1}); if s == 1; title('Laser biasing pNG/pG'); end;
-    
-    subplot(numSubjects,3,3*s-1);
-    scatter(ml,ap,sig(:,2),out(:,2),'s','filled'); axis equal;
-    caxis([-1 1]*maxEffect);  if s == 1; title('Laser biasing pL/pR'); end;
-    
-    subplot(numSubjects,3,3*s); 
-    imagesc(stat.coeffcorr); caxis([-1 1]); axis square; if s == 1; title('Correlation among params'); end;
 
-end
-cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+    ax1=subplot(2,3,1);
+    imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+    set(imX,'alphadata',0.3);
+    hold on;
+    scatter(ml,ap,sig(:,1),-out(:,1),'o','filled'); axis equal; caxis([-1 1]*maxEffect(1)); axis([-5 5 -6 4]);
+    ylabel(expRefs{s,1});
+    if s == 1; title('\Delta log[pGO/pNoGo]'); end;
+    cmap = [linspace(0,1,100)' ones(100,1) linspace(0,1,100)';
+        ones(100,1) linspace(1,0,100)' linspace(1,0,100)'];
+    colormap(ax1,flipud(cmap)); set(gca,'ycolor','k');
+    
+
+    ax2=subplot(2,3,2);
+    imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+    set(imX,'alphadata',0.3);
+    hold on;
+    %     scatter(ml,ap,sig(:,2),exp(-out(:,2)),'o','filled'); axis equal; caxis([0 2]);
+    scatter(ml,ap,sig(:,2),out(:,2),'o','filled'); axis equal; caxis([-1 1]*maxEffect(2)); axis([-5 5 -6 4]);
+    
+    if s == 1; title('\Delta log[pL/pR]'); end;
+    cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
         linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
-    colormap(cmap);
-    set(get(gcf,'children'),'box','off','xtick','','ytick','','xcolor','w','ycolor','k');
+    colormap(ax2,cmap); set(gca,'ycolor','w');
+    
+    
+    
+    ax3=subplot(2,3,3);
+    imagesc(stat.coeffcorr); caxis([-1 1]); axis square; if s == 1; title('Correlation among params'); end;
+    cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+        linspace(1,0,100)' linspace(1,0,100)' ones(100,1)]; colormap(ax3,cmap); set(gca,'ycolor','w');
+%     c3=colorbar; 
+    
+    set([ax1 ax2 ax3],'box','off','xtick','','ytick','','xcolor','w');
+%     c1=colorbar('peer',ax1,'East'); 
+%     c1.TickLabels={'$\frac{1}{5}$',...
+%         '$\frac{1}{2}$',...
+%         '$1$',...
+%         '$2$',...
+%         '$5$'};%,...
+%     c1.Ticks=log([1/5 1/2 1 2 5]);
+    
+%     c2=colorbar('peer',ax2,'East');
+%     c2.TickLabels={'$\frac{1}{20}$',...
+%         '$\frac{1}{10}$',...
+%         '$\frac{1}{5}$',...
+%         '$\frac{1}{2}$',...
+%         '$1$',...
+%         '$2$',...
+%         '$5$',...
+%         '$10$',...
+%         '$20$'}; c2.Ticks=log([1/20 1/10 1/5 1/2 1 2 5 10 20]);
+%     set([c1 c2 c3],'TickLabelInterpreter','latex','FontSize',14,'LineWidth',1,'TickLength',0.09)
+    
+    if mode == 1 %Combines all sessions
+        %Plot pred vs actual
+        cVal = unique(l(s).data.contrast_cond(:));
 
-figure;
+        pGO=nan(length(cVal),length(cVal));
+        pR=nan(length(cVal),length(cVal));
+        
+        pred_pGO=nan(length(cVal),length(cVal));
+        pred_pR=nan(length(cVal),length(cVal));
+        
+        for cl=1:length(cVal)
+            for cr=1:length(cVal)
+                idx = l(s).data.laserIdx==0 & l(s).data.contrast_cond(:,1)==cVal(cl) & l(s).data.contrast_cond(:,2)==cVal(cr);
+                r=l(s).data.response(idx);
+                pGO(cl,cr) = mean(r<3);
+                pR(cl,cr) = mean(r(r<3)-1);
+                
+                p = mnrval(b(:,1),xh(find(idx,1,'first'),2:end));
+                pred_pGO(cl,cr) = p(2);
+                p = mnrval(b(:,2),xh(find(idx,1,'first'),2:end));
+                pred_pR(cl,cr) = p(2);
+            end
+        end
+        ax4=subplot(2,3,4);
+        imagesc(cVal,cVal,pGO-pred_pGO); set(gca,'ydir','normal'); xlabel('CR'); ylabel('CL');colormap(ax4,parula); caxis([-1 1]*0.5);
+        title('pGO_{actual} - pGO_{model}'); axis square; colorbar;
+        ax5=subplot(2,3,5);
+        imagesc(cVal,cVal,pR-pred_pR); set(gca,'ydir','normal'); xlabel('CR'); ylabel('CL'); colormap(ax5,parula); caxis([-1 1]*0.5);
+                title('pR_{actual} - pR_{model}'); axis square; colorbar;
+
+        colormap(ax4,cmap);
+        colormap(ax5,cmap);
+    end
+    
+end
+set(gcf,'color','w');
+
+figure('name','mean map');
 avg = mean(laserEffect,3);
 ap = l(s).inactivationSite(:,1);
 ml = l(s).inactivationSite(:,2);
@@ -319,14 +274,23 @@ if bilateral_mirror == 1
     ml = [ml;-ml];
     out = [out;out];
 end
-subplot(1,2,1);
-scatter(ml,ap,200,out(:,1),'s','filled');  caxis([-1 1]*5); axis equal;
-subplot(1,2,2);
-scatter(ml,ap,200,out(:,2),'s','filled');  caxis([-1 1]*5); axis equal;
-    colormap(cmap); set(get(gcf,'children'),'box','off','xtick','','ytick','','xcolor','w','ycolor','w');
-    set(gcf,'color','w'); colorbar;
 
+a1=subplot(1,2,1);
+imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+set(imX,'alphadata',0.3);
+hold on;
+scatter(ml,ap,200,-out(:,1),'o','filled');  caxis([-1 1]*1); title('Laser biasing log pG/pNG'); axis equal;
 
+a2=subplot(1,2,2);
+imX=image(-5:1:5,4:-1:-6,kimg); axis square; set(gca,'ydir','normal');
+set(imX,'alphadata',0.3);
+hold on;
+scatter(ml,ap,200,out(:,2),'o','filled');  caxis([-1 1]*3.5); title('Laser biasing log pR/pL');  axis equal;
+colormap(cmap); set(get(gcf,'children'),'box','off','xtick','','ytick','','xcolor','w','ycolor','w');
+set(gcf,'color','w'); %colorbar('South');
+colormap(a1,flipud([linspace(0,1,100)' ones(100,1) linspace(0,1,100)';
+        ones(100,1) linspace(1,0,100)' linspace(1,0,100)'])); 
+colormap(a2,cmap);
 
 %% Two-stage fitting alternative
 %Fits nonLaser parameters first and then the laser effects
@@ -1078,44 +1042,61 @@ end
 colormap(flipud(cmap)); set(gcf,'color','w');
 
 %% LASER EFFECT MAP:  map of change in % choice over the laser sites (no model)
-pDiff = []; pDiff_all = [];
-        stim_labels = {'C=0','High CL','High CR','High CL and CR'};
+ pDiff_all = [];
+        stim_labels = {'C=0','Med CL','High CL','Med CR','High CR','High CL and CR'};
         NUM_SHUFFLES = 1000;
 
-nullP = nan(NUM_SHUFFLES,3,numSubjects,4);
+% nullP = nan(NUM_SHUFFLES,3,numSubjects,4);
 
 for s = 1:numSubjects
-    maxC = max(l(s).data.contrast_cond(:));
-    for type = 1:4
+    cVals = unique(l(s).data.contrast_cond(:));
+    maxC = cVals(end);
+    medC = cVals(end-1);
+    for type = 1:length(stim_labels)
         if type==1
             STIM_IDX = diff(l(s).data.contrast_cond,[],2)==0 & sum(l(s).data.contrast_cond,2)==0; %cl=cr=0
         elseif type==2
-            STIM_IDX = l(s).data.contrast_cond(:,1)==maxC & l(s).data.contrast_cond(:,2)==0; %cl=high
+            STIM_IDX = l(s).data.contrast_cond(:,1)==medC & l(s).data.contrast_cond(:,2)==0; %cl=medium
         elseif type==3
-            STIM_IDX = l(s).data.contrast_cond(:,2)==maxC & l(s).data.contrast_cond(:,1)==0; %cr=high
+            STIM_IDX = l(s).data.contrast_cond(:,1)==maxC & l(s).data.contrast_cond(:,2)==0; %cl=high
         elseif type==4
+            STIM_IDX = l(s).data.contrast_cond(:,2)==medC & l(s).data.contrast_cond(:,1)==0; %cr=medium
+        elseif type==5
+            STIM_IDX = l(s).data.contrast_cond(:,2)==maxC & l(s).data.contrast_cond(:,1)==0; %cr=high
+        elseif type==6
             STIM_IDX = l(s).data.contrast_cond(:,2)==maxC & l(s).data.contrast_cond(:,1)==maxC; %cr=cr=high
         end
         
         
+        %PER SESSION ANALYSIS (probably wrong)
+%         pDiff = [];
+%         for session = 1:max(l(s).data.sessionID)
+%             idx = l(s).data.laserIdx==0 & l(s).data.sessionID==session & STIM_IDX;
+%             noLaser_responses = l(s).data.response(idx);
+%             noLaser_p = 100*arrayfun(@(r)(sum(noLaser_responses==r)/length(noLaser_responses)),1:3);
+%             
+%             Laser_p=[];
+%             for site = 1:size(l(s).inactivationSite,1)
+%                 idx = l(s).data.laserIdx==site & l(s).data.sessionID==session & STIM_IDX;
+%                 Laser_responses = l(s).data.response(idx);
+%                 Laser_p(site,:) = 100*arrayfun(@(r)(sum(Laser_responses==r)/length(Laser_responses)),1:3);
+%             end
+%             
+%             pDiff(:,:,session) = bsxfun(@minus,Laser_p,noLaser_p);
+%         end
+%         pDiff_all(:,:,s,type) = nanmean(pDiff,3);
+
+        idx = l(s).data.laserIdx==0 & STIM_IDX;
+        noLaser_responses = l(s).data.response(idx);
+        noLaser_p = 100*arrayfun(@(r)(sum(noLaser_responses==r)/length(noLaser_responses)),1:3);
         
-        pDiff = [];
-        for session = 1:length(expRefs{s,2})
-            idx = l(s).data.laserIdx==0 & l(s).data.sessionID==session & STIM_IDX;
-            noLaser_responses = l(s).data.response(idx);
-            noLaser_p = 100*arrayfun(@(r)(sum(noLaser_responses==r)/length(noLaser_responses)),1:3);
-            
-            Laser_p=[];
-            for site = 1:size(l(s).inactivationSite,1)
-                idx = l(s).data.laserIdx==site & l(s).data.sessionID==session & STIM_IDX;
-                Laser_responses = l(s).data.response(idx);
-                Laser_p(site,:) = 100*arrayfun(@(r)(sum(Laser_responses==r)/length(Laser_responses)),1:3);
-            end
-            
-            pDiff(:,:,session) = bsxfun(@minus,Laser_p,noLaser_p);
+        Laser_p=[];
+        for site = 1:size(l(s).inactivationSite,1)
+            r = l(s).data.response(l(s).data.laserIdx==site & STIM_IDX);
+            Laser_p(site,:) = 100*sum([r==1 r==2 r==3],1)/length(r);
         end
-        pDiff_all(:,:,s,type) = nanmean(pDiff,3);
         
+        pDiff_all(:,:,s,type) = bsxfun(@minus,Laser_p,noLaser_p);
 %         
 %         %NULL
 %         tab = tabulate(l(s).data.laserIdx(l(s).data.response==lr));
@@ -1136,14 +1117,15 @@ for s = 1:numSubjects
 %         
 %         end
     end
-    
-    
+end
+
+for s = 1:numSubjects
     figure('name',expRefs{s,1});
     titles = {'\Delta pL','\Delta pR','\Delta pNG'};
-    for type = 1:4
+    for type = 1:length(stim_labels)
         for lr=1:3
             pd = pDiff_all(:,:,s,type);
-            subplot(4,3,3*type - 3 + lr);
+            subplot(length(stim_labels),3,3*type - 3 + lr);
             
             ap = l(s).inactivationSite(:,1);
             ml = l(s).inactivationSite(:,2);
@@ -1154,13 +1136,18 @@ for s = 1:numSubjects
                 out = [out;out];
             end
             
-            scatter(ml,ap,300,out,'s','filled'); axis equal; colorbar;
+            scatter(ml,ap,300,out,'s','filled'); axis equal; %colorbar;
             ylim([-6 4]);
             xlim([-4 4]);
             caxis([-1 1]*40);
             set(gca,'xtick','','ytick','','xcolor','w','ycolor','w');
             if type == 1
                 title(titles{lr});
+            end
+            
+            if lr==1
+                ylabel(stim_labels{type});
+                set(gca,'ycolor','k');
             end
         end
     end
@@ -1171,10 +1158,10 @@ cmap = [ linspace(0,1,100)' ones(100,1) linspace(0,1,100)';
 end
 
 figure('name','average over mice');
-pda = mean(pDiff_all,3);
-for type=1:4
+pda = nanmean(pDiff_all,3);
+for type=1:length(stim_labels)
     for lr=1:3
-        subplot(4,3,3*type - 3 + lr)
+        subplot(length(stim_labels),3,3*type - 3 + lr)
         
         ap = l(1).inactivationSite(:,1);
         ml = l(1).inactivationSite(:,2);
@@ -1196,9 +1183,10 @@ for type=1:4
         
         set(gca,'box','off','xtick','','ytick','','XColor','w','YColor','w');
         
-%         if lr==1
-%             ylabel(stim_labels{type});
-%         end
+        if lr==1
+            ylabel(stim_labels{type});
+            set(gca,'ycolor','k');
+        end
     end
 end
 set(gcf,'color','w');
@@ -1663,75 +1651,94 @@ for s = 1:numSubjects
     end
 end
 
-%% Laser GLM: overall crossvalidated goodness of fit
+%% Laser GLM: crossvalidated goodness of fit testing different laser terms, and MNR or Nested models
 cv_gof = [];
-model_labels = {'Orig MNR (One stage with intercept) L=cv',...
-                'Orig MNR (Two stage) L=cv',...
-                'Hier MNR (Combined sessions + Laser biasing L=0',...
-                'Hier MNR (Separate sessions + Laser biasing L=0'};
+model_labels = {'Non-laser sessions (MNR)',...
+    '+ Laser bias (MNR)',...
+    '+ Laser sens (MNR)',...
+    '+ Laser bias + Laser sens (MNR)',...
+    'Non-laser sessions (Nested logit)',...
+    '+ Laser bias (Nested logit)'};
+
+% session_flag = 'combine'; 
+session_flag='separate';
 for s = 1:numSubjects
+    disp([expRefs{s,1}]);
+    
     numSessions = max(l(s).data.sessionID);
+    switch(session_flag)
+        case 'separate'
+            xh = X{s};
+            yh = Y{s};
+        case 'combine'
+            xh = [];
+            for session = 1:numSessions
+                xh = [xh; X{s}(l(s).data.sessionID==session,(3*session-2):(3*session))];
+            end
+            xh = [xh X{s}(:,3*numSessions+1:end)];
+            numSessions = 1;
+    end
+        
     cv = cvpartition(size(X{s},1),'kfold',5);
     
-    p_hats = nan(cv.NumObservations,4);
-    for iter = 1:cv.NumTestSets
-        disp(iter);
-        disp(iter);
-        trainX = X{s}(cv.training(iter),:);
-        trainY = Y{s}(cv.training(iter));
+    p_hats = nan(cv.NumObservations,length(model_labels));
+    for iter = 1:cv.NumTestSets  
+        disp(['Iter: ' num2str(iter) '/5']);
         
-        testX = X{s}(cv.test(iter),:);
+        trainX = xh(cv.training(iter),:);
+        trainY = Y{s}(cv.training(iter));
+        testX = xh(cv.test(iter),:);
         testY = Y{s}(cv.test(iter));
         
-%         %one stage fitting without a global intercept
-%         opts.intr=0;
-%         fit=cvglmnet(trainX,trainY,'multinomial',glmnetSet(opts));
-%         p = cvglmnetPredict(fit,testX,'lambda_min','response');
-%         p_hats(cv.test(iter),1) = p(sub2ind(size(p), [1:length(testY)]', testY));
-%         
-        %one stage fitting with a global intercept: no laser terms
-        opts.intr=1;
-        fit = cvglmnet(trainX(:,1:numSessions*3),trainY,'multinomial',glmnetSet(opts));
-        p = cvglmnetPredict(fit,testX(:,1:numSessions*3),'lambda_min','response');
+        opts=[];
+        opts.intr = 1; %all fits with intercept
+        lambda = 0; %lambda = 'lambda_1se';
+        
+        %Non-laser sessions
+        fit = cvglmnet(trainX(:,1:3*numSessions),trainY,'multinomial',glmnetSet(opts));
+        p = cvglmnetPredict(fit,testX(:,1:3*numSessions),lambda,'response');
         p_hats(cv.test(iter),1) = p(sub2ind(size(p), [1:length(testY)]', testY));
-%         
-        %two stage fitting with a nonLaser global intercept only
-        twoStageFitOpts = struct;
-        twoStageFitOpts.intr = 1;
-        nonL_idx = l(s).data.laserIdx(cv.training(iter))==0;
-        fit1=cvglmnet(trainX(nonL_idx,1:(3*numSessions)),trainY(nonL_idx),'multinomial',glmnetSet(twoStageFitOpts));
+        disp('Done non-laser sessions');
         
-        L_idx = l(s).data.laserIdx(cv.training(iter))>0;
-        twoStageFitOpts.offset = cvglmnetPredict(fit1,trainX(L_idx,1:(3*numSessions)),[],'link');
-        twoStageFitOpts.intr = 0;
-        fit2=cvglmnet(trainX(L_idx,((3*numSessions)+1):end),trainY(L_idx),'multinomial',glmnetSet(twoStageFitOpts));
-        
-        nL_idx_test = l(s).data.laserIdx(cv.test(iter))==0;
-        L_idx_test = l(s).data.laserIdx(cv.test(iter))>0;
-        
-        offset = cvglmnetPredict(fit1,testX(:,1:(3*numSessions)),[],'link');
-        p = cvglmnetPredict(fit2,testX(:,((3*numSessions)+1):end),[],'response',[],offset);
+        %+ Laser bias
+        fit = cvglmnet(trainX(:,[1:3*numSessions 3*numSessions+1:3:end]),trainY,'multinomial',glmnetSet(opts));
+        p = cvglmnetPredict(fit,testX(:,[1:3*numSessions 3*numSessions+1:3:end]),lambda,'response');
         p_hats(cv.test(iter),2) = p(sub2ind(size(p), [1:length(testY)]', testY));
+        disp('Done +laser bias');
         
-        %Hier MNR with combined sessions + laser biasing only
-        trainX2 = X2{s}(cv.training(iter),:);
-        trainY2 = Y2{s}(cv.training(iter));
-        testX2 = X2{s}(cv.test(iter),:);
-        testY2 = Y2{s}(cv.test(iter));
+        %+ Laser sens
+        fit = cvglmnet(trainX(:,[1:3*numSessions 3*numSessions+2:3:end 3*numSessions+3:3:end]),trainY,'multinomial',glmnetSet(opts));
+        p = cvglmnetPredict(fit,testX(:,[1:3*numSessions 3*numSessions+2:3:end 3*numSessions+3:3:end]),lambda,'response');
+        p_hats(cv.test(iter),3) = p(sub2ind(size(p), [1:length(testY)]', testY));
+        disp('Done +laser sens');
         
-        [b,dev,stat]=mnrfit(trainX2(:,2:end),trainY2,'model','hierarchical');
-        p = mnrval(b,testX2(:,2:end));
-        p_hats(cv.test(iter),3) = p(sub2ind(size(p), [1:length(testY2)]', testY2));
+        %+ Laser bias + Laser sens
+        fit = cvglmnet(trainX,trainY,'multinomial',glmnetSet(opts));
+        p = cvglmnetPredict(fit,testX,lambda,'response');
+        p_hats(cv.test(iter),4) = p(sub2ind(size(p), [1:length(testY)]', testY));
+        disp('Done +laser bias +laser sens');
+        
+        %Nested logit Non-laser sessions
+        fit1 = cvglmnet(trainX(:,1:3*numSessions),trainY==3,'binomial',glmnetSet(opts));%NG vs GO fits
+        fit2 = cvglmnet(trainX(trainY==1 | trainY==2,1:3*numSessions),trainY(trainY==1 | trainY==2),'binomial',glmnetSet(opts));
+        pNG = cvglmnetPredict(fit1,testX(:,1:3*numSessions),lambda,'response');
+        pR_G = cvglmnetPredict(fit2,testX(:,1:3*numSessions),lambda,'response'); pL_G = 1-pR_G;
+        p = [pL_G.*(1-pNG) pR_G.*(1-pNG) pNG];
+        p_hats(cv.test(iter),5) = p(sub2ind(size(p), [1:length(testY)]', testY));
+        disp('Done nested logit non-laser sessions');
+        
+        %+ Laser bias
+        fit1 = cvglmnet(trainX(:,[1:3*numSessions 3*numSessions+1:3:end]),trainY==3,'binomial',glmnetSet(opts));%NG vs GO fits
+        fit2 = cvglmnet(trainX(trainY==1 | trainY==2,[1:3*numSessions 3*numSessions+1:3:end]),trainY(trainY==1 | trainY==2),'binomial',glmnetSet(opts));
+        pNG = cvglmnetPredict(fit1,testX(:,[1:3*numSessions 3*numSessions+1:3:end]),lambda,'response');
+        pR_G = cvglmnetPredict(fit2,testX(:,[1:3*numSessions 3*numSessions+1:3:end]),lambda,'response'); pL_G = 1-pR_G;
+        p = [pL_G.*(1-pNG) pR_G.*(1-pNG) pNG];
+        p_hats(cv.test(iter),6) = p(sub2ind(size(p), [1:length(testY)]', testY));
+        disp('Done nested logit non-laser sessions +laser bias');
+        
+        %Transformed MNR to Nested logit + laser bias
+        %TODO?
 
-        %Hier MNR with separate sessions + laser biasing only
-        trainX2 = [X{s}(cv.training(iter),1:3*numSessions) X{s}(cv.training(iter),3*numSessions+1 :3: end)];
-        trainY2 = Y2{s}(cv.training(iter));
-        testX2 = [X{s}(cv.test(iter),1:3*numSessions) X{s}(cv.test(iter),3*numSessions+1 :3: end)];
-        testY2 = Y2{s}(cv.test(iter));
-        
-        [b,dev,stat]=mnrfit(trainX2(:,2:end),trainY2,'model','hierarchical');
-        p = mnrval(b,testX2(:,2:end));
-        p_hats(cv.test(iter),4) = p(sub2ind(size(p), [1:length(testY2)]', testY2));
     end
     
     tab=tabulate(Y{s}); tab=tab(:,3)/100;
@@ -1740,9 +1747,10 @@ for s = 1:numSubjects
     cv_gof(s,:) = mean(log2(p_hats))-guess_bpt;
 end 
 disp('done');
-
+figure;
 bar(cv_gof); ylabel('loglik [bits] relative to guessing @~-1.5'); legend(model_labels);
 set(gca,'XTickLabel',expRefs(:,1),'xtick',1:numSubjects);
+title([expt '. Global intercept: ' num2str(opts.intr) '. Lambda: ' num2str(lambda)]);
 
 %% (NO GLM) RT across stimulus conditions on noLaser trials
 figure; labels={'left','right'};
@@ -1832,7 +1840,7 @@ for s = 1:numSubjects
 end
 
 %% Crossval C50 vs C50-subset
-figure;
+figure; numFolds = 10;
 for s = 1:numSubjects
    numSessions =  max(l(s).data.sessionID);
    subplot(1,numSubjects,s);
@@ -1842,10 +1850,10 @@ for s = 1:numSubjects
        D = getrow(l(s).data,l(s).data.laserIdx==0 & l(s).data.sessionID==se);
        g = GLM(D);
        
-       g.regularise = @(b)0.001*sum(b.^2);
+%        g.regularise = @(b)0.001*sum(b.^2);
        
-       ll(se,1) = mean(log2(g.setModel('C50-subset').fitCV(5).p_hat)) - g.guess_bpt;
-       ll(se,2) = mean(log2(g.setModel('C50').fitCV(5).p_hat)) - g.guess_bpt;
+       ll(se,1) = mean(log2(g.setModel('C50-subset').fitCV(numFolds).p_hat)) - g.guess_bpt;
+       ll(se,2) = mean(log2(g.setModel('C50').fitCV(numFolds).p_hat)) - g.guess_bpt;
    end
    
    bar(ll','stacked'); set(gca,'box','off','XTickLabel',{'C50-subset','C50'},'XTick',[1 2]);
@@ -1857,4 +1865,18 @@ for s = 1:numSubjects
    end
    
    set(gcf,'Color','w'); colormap gray;
+end
+
+%% Crossval with and without lapse rate
+%Need omnibusLaserGLM object loaded already
+
+for n = 1:length(o.names)
+    ll=[];
+    for session = 1:max(o.data{n}.sessionID)
+        D = getrow(o.data{n},o.data{n}.sessionID==session & o.data{n}.laserIdx==0);
+        g = GLM(D).setModel('C50-subset');
+        
+        phats = [g.fitCV(10).p_hat g.addLapse.fitCV(10).p_hat];
+        ll(session,:)=mean(log2(phats)) - g.guess_bpt;
+    end
 end

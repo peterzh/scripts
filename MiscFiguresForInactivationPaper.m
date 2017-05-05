@@ -189,3 +189,49 @@ for site = 1:size(o2.inactivationCoords,1)
     plot(a,pLu,pLb,'o');
     plot(b,pRu,pRb,'o');
 end
+
+%% Plot unilateral and bilateral model parameter estimates on the same scale
+%unilat = o
+%bilat = o2
+O = {o,o2};
+img=imread('D:\kirkcaldie_brain_BW_outline.png');
+
+figure('color','w');
+titles = {'\Delta bL','\Delta bR','\Delta sL','\Delta sR','\Delta n','\Delta c50'};
+for oi = 1:2
+    oldPara = mean(O{oi}.fitData.nonLaserParams{end});
+    for i = 1:6
+        subplot(2,6,i + (oi==2)*6 );
+        ml = O{oi}.inactivationCoords(:,2);
+        ap = O{oi}.inactivationCoords(:,1);
+        para = O{oi}.fitData.params{end}(:,i);
+%         para = para/oldPara(i);
+        
+        if oi == 2
+            ml = [ml;-ml];
+            ap = [ap;ap];
+            para = [para;para];
+        end
+        imX=imagesc(linspace(-4.5,4.5,100),linspace(3.75,-5.2,100),img);
+                    set(gca,'ydir','normal');
+                    set(imX,'alphadata',0.7); hold on;
+        scatter(ml,ap,200,para,'s','filled'); axis equal; xlim([-1 1]*4.5); ylim([-1 1]*5.5);       
+        set(gca,'xtick','','ytick','','xcolor','w','ycolor','w');
+        colorbar;
+        
+        if i <= 2
+            caxis([-1 1]*0.3);
+        elseif i>2 && i<=4
+            caxis([-1 1]*6);
+        else
+            caxis([-1 1]*1);
+        end
+        
+        if oi == 1
+            title(titles{i});
+        end
+    end
+end
+ cmap = [ones(100,1) linspace(0,1,100)' linspace(0,1,100)';
+                    linspace(1,0,100)' linspace(1,0,100)' ones(100,1)];
+                colormap(flipud(cmap));
