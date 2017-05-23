@@ -4,3 +4,4 @@
 *.R
 glmnet_input.dat
 *.RData
+*.ini
