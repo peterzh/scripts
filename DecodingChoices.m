@@ -1,6 +1,6 @@
 %% Load widefield data
 tic;
-session = 4;
+session = 1;
 [W,behav,behavT,otherInfo]=getWidefieldData('nick widefield',session);
 type = 'widefield';
 toc;
@@ -11,46 +11,6 @@ session = 3;
 [W,behav,behavT,otherInfo]=getSpikingData('nick neuropixels',session);
 type = 'spikes';
 toc;
-
-%% Plot behavioural timestamps
-cols = [         0    0.4470    0.7410
-        0.8500    0.3250    0.0980
-        0.4940    0.1840    0.5560
-        0.4660    0.6740    0.1880
-        0.3010    0.7450    0.9330
-        0.6350    0.0780    0.1840];
-
-f1=figure('name',otherInfo{1});
-for e = 1:length(behavT.timestamps) %for each epoch
-    subplot(4,length(behavT.timestamps),e); hold on;
-    
-    h=plot(zeros(length(behavT.(behavT.timestamps{e})),1),1:length(behavT.(behavT.timestamps{e})),'.');
-    h.Color = cols(e,:);
-    h.YData=h.YData+75;
-    ylim([0 max(h.YData)]);
-    
-    otherIdx = 1:length(behavT.timestamps);
-    otherIdx(e) = [];
-    
-    for ot = 1:length(otherIdx)
-        
-        dt = behavT.(behavT.timestamps{otherIdx(ot)}) - behavT.(behavT.timestamps{e});
-        %             dt = sort(dt);
-        h = plot(dt,1:length(dt),'.');
-        h.Color = cols(otherIdx(ot),:);
-        h.YData=h.YData+75;
-        
-        h = histogram(dt,100);
-        h.FaceColor = cols(otherIdx(ot),:);
-        h.EdgeColor = cols(otherIdx(ot),:);
-        %             h.EdgeColor = [0 0 0];
-    end
-    
-    xlabel(behavT.timestamps{e},'Color',cols(e,:));
-    xlim([-1 1]*1);
-    
-    set(gca, 'ytick','','ycolor','w');
-end
 
 %% Fit behav-only model to get Offsets
 tic;
@@ -84,11 +44,11 @@ end
 X = sparse(cfn(behav.contrast_cond,n,c50));
 Y = behav.response;
 
-csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_Y.dat',Y); %Write input data to a file
-csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_X.dat',full(X));
-csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_Xtest.dat',full(X));
-system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_interface.R');
-offset_MNR_NC50 = csvread('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_link.dat');
+csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Y.dat',Y); %Write input data to a file
+csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_X.dat',full(X));
+csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Xtest.dat',full(X));
+system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_interface.R');
+offset_MNR_NC50 = csvread('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_link.dat');
 toc;
 
 %% Cross-validation: behav-only model baseline
@@ -102,11 +62,11 @@ for fold = 1:cv.NumTestSets
     testX = X(cv.test(fold),:);
     testY = Y(cv.test(fold));
     
-    csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_Y.dat',trainY); %Write input data to a file
-    csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_X.dat',full(trainX));
-    csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_Xtest.dat',full(testX));
-    system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_interface.R');
-    p = csvread('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_phat.dat');
+    csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Y.dat',trainY); %Write input data to a file
+    csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_X.dat',full(trainX));
+    csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Xtest.dat',full(testX));
+    system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_interface.R');
+    p = csvread('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_phat.dat');
     
     %Orig MNR
     phat_baseline(cv.test(fold),1) = p(:,1).*(testY==1) + p(:,2).*(testY==2) + p(:,3).*(testY==3);
@@ -187,13 +147,13 @@ for e = 1:numEpochs %for each epoch
             trainoffset = offset_MNR_NC50(cv.training(fold),:);
             testoffset = offset_MNR_NC50(cv.test(fold),:);
             
-            csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_offset.dat',trainoffset); %Write input data to a file
-            csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_offsettest.dat',testoffset); %Write input data to a file
-            csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_Y.dat',trainY);
-            csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_X.dat',trainX);
-            csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_Xtest.dat',testX);
-            system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_interface_withoffset.R')
-            p = csvread('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_phat.dat');
+            csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_offset.dat',trainoffset); %Write input data to a file
+            csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_offsettest.dat',testoffset); %Write input data to a file
+            csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Y.dat',trainY);
+            csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_X.dat',trainX);
+            csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Xtest.dat',testX);
+            system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_interface_withoffset.R')
+            p = csvread('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_phat.dat');
             
             if max(behav.response)==2
                 p = [1-p p];
@@ -219,7 +179,46 @@ for e = 1:numEpochs %for each epoch
 end
 toc;
 
-%% Plot 
+%% Plot everything
+cols = [         0    0.4470    0.7410
+        0.8500    0.3250    0.0980
+        0.4940    0.1840    0.5560
+        0.4660    0.6740    0.1880
+        0.3010    0.7450    0.9330
+        0.6350    0.0780    0.1840];
+
+f1=figure('name',otherInfo{1});
+for e = 1:length(behavT.timestamps) %for each epoch
+    subplot(2,length(behavT.timestamps),e); hold on;
+    
+    h=plot(zeros(length(behavT.(behavT.timestamps{e})),1),1:length(behavT.(behavT.timestamps{e})),'.');
+    h.Color = cols(e,:);
+%     h.YData=h.YData+75;
+    ylim([0 max(h.YData)]);
+    
+    otherIdx = 1:length(behavT.timestamps);
+    otherIdx(e) = [];
+    
+    for ot = 1:length(otherIdx)
+        
+        dt = behavT.(behavT.timestamps{otherIdx(ot)}) - behavT.(behavT.timestamps{e});
+        %             dt = sort(dt);
+        h = plot(dt,1:length(dt),'.');
+        h.Color = cols(otherIdx(ot),:);
+        h.YData=h.YData+75;
+        
+        h = histogram(dt,100);
+        h.FaceColor = cols(otherIdx(ot),:);
+        h.EdgeColor = cols(otherIdx(ot),:);
+        %             h.EdgeColor = [0 0 0];
+    end
+    
+    xlabel(behavT.timestamps{e},'Color',cols(e,:));
+    xlim([-1 1]*1);
+    
+    set(gca, 'ytick','','ycolor','w');
+end
+
 h=[];
 for e = 1:numEpochs
     h(e)=subplot(2,numEpochs,numEpochs+e);
@@ -244,18 +243,31 @@ end
 linkaxes(h,'xy');
 set(h,'box','off');
 
+set(gcf,'color','w');
+
+if max(behav.response)==3
+    dir = '2AUC';
+else
+    dir = '2AFC';
+end
+
+makepretty;
+
+savefig(gcf,['\\basket.cortexlab.net\home\figures\GLM+NeuralActivity\glmnet_decoders\' dir '\' otherInfo{1}]);
+
 
 %% Fit complete model to get full parameter set
 X =  neuralActivity(:,:,1,1);
-csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_offset.dat',offset_MNR_NC50); %Write input data to a file
-csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_offsettest.dat',offset_MNR_NC50); %Write input data to a file
-csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_Y.dat',Y);
-csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_X.dat',X);
-csvwrite('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_Xtest.dat',X);
-system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_interface_withoffset.R')
-p = csvread('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_phat.dat');
+csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_offset.dat',offset_MNR_NC50); %Write input data to a file
+csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_offsettest.dat',offset_MNR_NC50); %Write input data to a file
+csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Y.dat',Y);
+csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_X.dat',X);
+csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Xtest.dat',X);
+system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_interface_withoffset.R')
+p = csvread('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_phat.dat');
 
-neurParams = csvread('C:\Users\Peter\Desktop\GLMNET_DATA\glmnet_params.dat');
+neurParams = csvread('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_params.dat');
+figure;
 plot(aax,neurParams(:,1),neurParams(:,2),'ko'); title(aax,num2str(tsteps(t)));
 drawnow;
 

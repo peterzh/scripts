@@ -6,7 +6,7 @@ figDir = 'B:\figures\GLM+Laser';
 MODEL = 'C50-subset';
 
 % >> PRELOAD expRefs from LaserIdentifySessions script <<
-subjects = {'Hopkins'};
+subjects = {'Eijkman'};
 figLabel = 'LeftVisual';
 
 expRefs = LaserIdentifySessions(subjects,figLabel);
@@ -31,6 +31,8 @@ for b=1:size(expRefs,1)
     if size(gl.inactivationSite,1) > 1
         warning(['Block contains multiple inactivation sites. Using ' num2str( gl.inactivationSite(laserID,:) )]);
     end
+    
+    disp(gl.inactivationSite(laserID,:));
     
     g = GLM(expRef);
 %     g.regularise = @(b)(sum(b.^2)*0.1);
@@ -189,7 +191,7 @@ for b=1:size(expRefs,1)
     
 %     keyboard;
     set(gcf,'color','w');
-    print(fullfile(figDir,[expRef '_' figLabel '_' num2str(laserID) '.pdf' ]),'-dpdf','-painters');
+%     print(fullfile(figDir,[expRef '_' figLabel '_' num2str(laserID) '.pdf' ]),'-dpdf','-painters');
 end
 
 
@@ -206,8 +208,8 @@ end
 figDir = 'B:\figures\GLM+Laser';
 MODEL = 'C50-subset';
 
-subjects = {'Eijkman','Hopkins'};%,'Eijkman','Morgan','Whipple','Murphy','Spemann'};
-figLabel = 'LeftBarrel';
+subjects = {'Hopkins'};
+figLabel = 'RightVisual';
 expRefs = LaserIdentifySessions(subjects,figLabel);
 % << Preload expRefs first
 
@@ -224,6 +226,7 @@ D.laserIdx(D.laserIdx>1) = 1;
 
 g = GLM(D);
 g = g.setModel(MODEL);
+% g.regularise = @(b)(0.01*sum(b.^2));
 
 % NO LASER CALCULATIONS
 g.data = getrow(g.data,g.data.laserIdx==0);
@@ -266,6 +269,10 @@ phat_noLaser = gNoLaser.calculatePhat(gNoLaser.parameterFits,inputs);
 
 % LASER CALCULATIONS
 g.data = getrow(D,D.laserIdx==1);
+
+%Set same N and C50 as the nonlaser condition
+g.parameterBounds(:,5:6) = repmat(gNoLaser.parameterFits(5:6),2,1);
+
 gLaser = g.fit;
     
 %extract datapoints with errors
@@ -377,5 +384,5 @@ set(gcf,'color','w');
 ylim([-5 5]);
 set([zl zr],'fontsize',10);
 %     keyboard;
-print(fullfile(figDir,[figLabel '.pdf' ]),'-dpdf','-painters');
-savefig(fullfile(figDir,[figLabel '.fig' ]));
+% print(fullfile(figDir,[figLabel '.pdf' ]),'-dpdf','-painters');
+% savefig(fullfile(figDir,[figLabel '.fig' ]));

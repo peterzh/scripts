@@ -37,6 +37,7 @@ for b=1:size(expRefs,1)
     %     figure('name',['expRef: ' g.expRef ' Inactivation Site: [' num2str(gl.inactivationSite(laserID,:)) '] Model: ' MODEL]);
     g = g.setModel('C50-subset');
     g.regularise = @(b)(0.05*sum(b.^2));
+%     g.regularise = @(b)(0.001*sum(b.^2));
     
     % NO LASER CALCULATIONS
     NUMTRIALS(b) = sum(gl.data.laserIdx==0 | gl.data.laserIdx==laserID);
@@ -75,8 +76,8 @@ for b=1:size(expRefs,1)
     
 %     pDL = g.calculatePhat(P_noLaser(b,:),[0.2 0]) - g.calculatePhat(P_Laser(b,:),[0.2 0]);
 %     pDR = g.calculatePhat(P_noLaser(b,:),[0 0.2]) - g.calculatePhat(P_Laser(b,:),[0 0.2]);
-    pDL = g.calculatePhat(P_noLaser(b,:),[0.2 0]) - g.calculatePhat(P_Laser(b,:),[CL 0]);
-    pDR = g.calculatePhat(P_noLaser(b,:),[0 0.2]) - g.calculatePhat(P_Laser(b,:),[0 CR]);
+    pDL = g.calculatePhat(P_noLaser(b,:),[CL 0]) - g.calculatePhat(P_Laser(b,:),[CL 0]);
+    pDR = g.calculatePhat(P_noLaser(b,:),[0 CR]) - g.calculatePhat(P_Laser(b,:),[0 CR]);
 
     pDiff(b,1) = pDL(1);
     pDiff(b,2) = pDR(2);
@@ -88,7 +89,27 @@ mouseID = cell2mat(cellfun(@(c)(strcmp(c(14),'H')),expRefs(:,1),'uni',0)); %1 Ho
 figure;
 areaID = cell2mat(expRefs(:,3));
 % pdiff = abs(P_Laser - P_noLaser);
-s = [ZL20_nolaser - ZL20_laser, ZR20_nolaser - ZR20_laser];
+s = [ZR20_nolaser - ZR20_laser, ZL20_nolaser - ZL20_laser];
+
+%normality test
+
+%t-Tests
+% [H,P,CI,STATS] = ttest2( s(areaID==2,1) , s(areaID==4,1) , 'tail','both');
+% disp(['delta ZR: ' figLabels{2} ' [M=' num2str(mean(s(areaID==2,1))) ' SD=' num2str(std(s(areaID==2,1)))   '] vs ' figLabels{4}  ' [M=' num2str(mean(s(areaID==4,1))) ' SD=' num2str(std(s(areaID==4,1)))   '] ' 'dof=' num2str(STATS.df) ' t=' num2str(STATS.tstat) ' p=' num2str(P)])
+[P,H,STATS]=ranksum( s(areaID==2,1) , s(areaID==4,1) );
+disp(['delta ZR: ' figLabels{2} ' [M=' num2str(mean(s(areaID==2,1))) ' SD=' num2str(std(s(areaID==2,1)))   '] vs ' figLabels{4}  ' [M=' num2str(mean(s(areaID==4,1))) ' SD=' num2str(std(s(areaID==4,1)))   '] ' ' z=' num2str(STATS.zval) ' p=' num2str(P)])
+
+
+
+% 
+% [H,P,CI,STATS] = ttest2( s(areaID==1,2) , s(areaID==3,2) , 'tail','both');
+% disp(['delta ZL: ' figLabels{1} ' [M=' num2str(mean(s(areaID==1,2))) ' SD=' num2str(std(s(areaID==1,2)))   '] vs ' figLabels{3}  ' [M=' num2str(mean(s(areaID==3,2))) ' SD=' num2str(std(s(areaID==3,2)))   '] ' 'dof=' num2str(STATS.df) ' t=' num2str(STATS.tstat) ' p=' num2str(P)])
+
+[P,H,STATS]=ranksum( s(areaID==1,2) , s(areaID==3,2) );
+disp(['delta ZL: ' figLabels{1} ' [M=' num2str(mean(s(areaID==1,2))) ' SD=' num2str(std(s(areaID==1,2)))   '] vs ' figLabels{3}  ' [M=' num2str(mean(s(areaID==3,2))) ' SD=' num2str(std(s(areaID==3,2)))   '] ' ' z=' num2str(STATS.zval) ' p=' num2str(P)])
+
+
+
 
 % s = [ZL20_laser./ZL20_nolaser, ZR20_laser./ZR20_nolaser];
 
@@ -113,7 +134,7 @@ axis equal;
 hold on
 ezplot('y=x');
 title('');
-xlabel('ZL_{nolaser} - ZL_{laser}'); ylabel('ZR_{nolaser} - ZR_{laser}');
+xlabel('ZR_{nolaser} - ZR_{laser}'); ylabel('ZL_{nolaser} - ZL_{laser}');
 
 % xlabel('ZL20_{laser} / ZL20_{nolaser}'); ylabel('ZR20_{laser} / ZR20_{nolaser}');
 
@@ -122,18 +143,18 @@ xlabel('ZL_{nolaser} - ZL_{laser}'); ylabel('ZR_{nolaser} - ZR_{laser}');
 
 m = nanmedian(s(areaID==1,:));
 % m = nanmean(s(areaID==1,:));
-plot(m(1),m(2),'gd','markersize',20);
+plot(m(1),m(2),'gd','markersize',20,'markeredgecolor',[0 146/255 146/255]);
 
 m = nanmedian(s(areaID==2,:));
 % m = nanmean(s(areaID==2,:));
-plot(m(1),m(2),'rd','markersize',20);
+plot(m(1),m(2),'rd','markersize',20,'markeredgecolor',[146/255 0 0]);
 
 m = nanmedian(s(areaID==3,:));
 % m = nanmean(s(areaID==3,:));
-plot(m(1),m(2),'ks','markersize',20);
+plot(m(1),m(2),'ks','markersize',20,'markeredgecolor',[1 1 1]*0.2);
 
 m = nanmedian(s(areaID==4,:));
 % m = nanmean(s(areaID==4,:));
-plot(m(1),m(2),'ko','markersize',20);
+plot(m(1),m(2),'ko','markersize',20,'markeredgecolor',[1 1 1]*0.6);
 %Add error bars
 hold off;

@@ -24,6 +24,9 @@ end
 
 a=1;
 nexpRefs={};
+
+coords = [];
+
 for b = 1:length(expRefs)
     try
         l=laserGLM(expRefs{b});
@@ -35,6 +38,8 @@ for b = 1:length(expRefs)
                 disp(expRefs{b});
                 nexpRefs{a,1} = expRefs{b};
                 nexpRefs{a,2} = s;
+                
+%                 coords = [coords; site];
                 a=a+1;
             end
         end
@@ -45,4 +50,6 @@ end
 disp('Done!');
 expRefs = nexpRefs;
 figLabel = region;
+
+% unique(coords(:,1:2),'rows')
 end
