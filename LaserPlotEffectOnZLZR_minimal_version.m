@@ -9,6 +9,9 @@ for region = 1:length(figLabels)
     expRefs=[expRefs;refs];
 end
 
+session_names = cellfun(@(er) er(14:end),expRefs(:,1),'uni',0);
+[unique_subjs,~,unique_subjsID] = unique(session_names);
+
 %% 
 P_Laser = nan(size(expRefs,1),6);
 P_noLaser = nan(size(expRefs,1),6);
@@ -84,9 +87,8 @@ for b=1:size(expRefs,1)
 end
 
 % s(sum((s<RANGE(1) | s>RANGE(2)),2)>0,:)=nan
-mouseID = cell2mat(cellfun(@(c)(strcmp(c(14),'H')),expRefs(:,1),'uni',0)); %1 Hopkins, 0 Eijkman
 
-figure;
+figure; axis; hold on;
 areaID = cell2mat(expRefs(:,3));
 % pdiff = abs(P_Laser - P_noLaser);
 s = [ZR20_nolaser - ZR20_laser, ZL20_nolaser - ZL20_laser];
@@ -118,16 +120,34 @@ disp(['delta ZL: ' figLabels{1} ' [M=' num2str(mean(s(areaID==1,2))) ' SD=' num2
 
 % s = [sum(pdiff(:,1:2),2) sum(pdiff(:,3:4),2)];
 
-plot(s(areaID==1,1),s(areaID==1,2),'rs',...
-    s(areaID==2,1),s(areaID==2,2),'bs',...
-    s(areaID==3,1),s(areaID==3,2),'ks',...
-    s(areaID==4,1),s(areaID==4,2),'ks');
-ax=get(gca,'children');
-set(ax(1),'markerfacecolor',[1 1 1]*1,'markeredgecolor',[1 1 1]*0.6,'linewidth',2);
-set(ax(2),'markerfacecolor',[1 1 1]*1,'markeredgecolor',[1 1 1]*0.2,'linewidth',2);
-set(ax(3),'markerfacecolor',[146/255 0 0],'markeredgecolor',[146/255 0 0]);
-set(ax(4),'markerfacecolor',[0 146/255 146/255],'markeredgecolor',[0 146/255 146/255]);
-set(ax,'markersize',8);
+symbols = {'o','s','d'};
+
+for subj = 1:length(unique_subjs)
+    ax = plot(s(areaID==1 & unique_subjsID==subj,1),s(areaID==1 & unique_subjsID==subj,2),symbols{subj});
+    set(ax,'markerfacecolor',[0 146/255 146/255],'markeredgecolor',[0 146/255 146/255]);
+    
+    ax = plot(s(areaID==2 & unique_subjsID==subj,1),s(areaID==2 & unique_subjsID==subj,2),symbols{subj});
+    set(ax,'markerfacecolor',[146/255 0 0],'markeredgecolor',[146/255 0 0]);
+    
+    ax = plot(s(areaID==3 & unique_subjsID==subj,1),s(areaID==3 & unique_subjsID==subj,2),symbols{subj});
+    set(ax,'markerfacecolor',[1 1 1]*1,'markeredgecolor',[1 1 1]*0.2,'linewidth',2);
+    
+    ax = plot(s(areaID==4 & unique_subjsID==subj,1),s(areaID==4 & unique_subjsID==subj,2),symbols{subj});
+    set(ax,'markerfacecolor',[1 1 1]*1,'markeredgecolor',[1 1 1]*0.6,'linewidth',2);
+    
+end
+
+% plot(s(areaID==1,1),s(areaID==1,2),'rs',...
+%     s(areaID==2,1),s(areaID==2,2),'bs',...
+%     s(areaID==3,1),s(areaID==3,2),'ks',...
+%     s(areaID==4,1),s(areaID==4,2),'ks');
+% 
+% ax=get(gca,'children');
+% set(ax(1),'markerfacecolor',[1 1 1]*1,'markeredgecolor',[1 1 1]*0.6,'linewidth',2);
+% set(ax(2),'markerfacecolor',[1 1 1]*1,'markeredgecolor',[1 1 1]*0.2,'linewidth',2);
+% set(ax(3),'markerfacecolor',[146/255 0 0],'markeredgecolor',[146/255 0 0]);
+% set(ax(4),'markerfacecolor',[0 146/255 146/255],'markeredgecolor',[0 146/255 146/255]);
+% set(ax,'markersize',8);
 legend(figLabels)
 axis equal;
 
