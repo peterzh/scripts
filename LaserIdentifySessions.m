@@ -34,7 +34,7 @@ for b = 1:length(expRefs)
         for s=1:size(l.inactivationSite)
             site = l.inactivationSite(s,:);
             
-            if AP(1) < site(1) && site(1) < AP(2) && ML(1) < site(2) && site(2) < ML(2)
+            if AP(1) < site(2) && site(2) < AP(2) && ML(1) < site(1) && site(1) < ML(2)
                 disp(expRefs{b});
                 nexpRefs{a,1} = expRefs{b};
                 nexpRefs{a,2} = s;
