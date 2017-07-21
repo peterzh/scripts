@@ -1,6 +1,6 @@
 %% Load widefield data
 tic;
-session = 1;
+session =1;
 [W,behav,behavT,otherInfo]=getWidefieldData('nick widefield',session);
 type = 'widefield';
 toc;
@@ -86,7 +86,7 @@ toc;
 
 %% Go through each epoch, extract neural data
 tic;
-numT = 81; %number of time bins to sample neural activity from within an epoch
+numT = 150; %number of time bins to sample neural activity from within an epoch
 interval = [-1 1];
 tsteps = linspace(interval(1),interval(2),numT);
 
@@ -271,9 +271,82 @@ figure;
 plot(aax,neurParams(:,1),neurParams(:,2),'ko'); title(aax,num2str(tsteps(t)));
 drawnow;
 
+%% Fit  temporal component of widefield to predict choice
+tic;
+figure('color','w','name',otherInfo{1});
+for e = 1:numEpochs %for each epoch
+    disp(['Epoch ' num2str(e) '/' num2str(numEpochs)]);
+    subplot(2,numEpochs,e);
+    
+    numComponents = size(W.U,3);
+    beta = nan(numComponents,2,length(tsteps));
+    for t = 1:length(tsteps)
+        X = [behav.stimulus neuralActivity(:,:,t,e)];
+        Y = behav.response;
+        csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Y.dat',Y);
+        csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_X.dat',X);
+        csvwrite('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_Xtest.dat',X);
+        system('"C:\Program Files\R\R-3.4.0\bin\R" CMD BATCH C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_interface.R')
+        
+        neurParams = csvread('C:\Users\Peter\Documents\MATLAB\GLMNET_DATA\glmnet_params.dat');
+
+%         b = mnrfit(neuralActivity(:,:,t,e),behav.response);
+        beta(:,:,t) = neurParams(4:end,:);
+        
+        imagesc([svdFrameReconstruct(W.U,beta(:,1,t)) svdFrameReconstruct(W.U,beta(:,2,t))]);
+        title(num2str(tsteps(t)));
+%         caxis([-1 1]*1e-3);
+        drawnow;
+%         pause(0.05);
+       
+    end
+    
+    subplot(2,numEpochs,e+numEpochs);    
+    title(behavT.timestamps{e});
+
+    plot(tsteps,squeeze(beta(:,1,:)),'-',tsteps,squeeze(beta(:,2,:)),'--');
+end
+toc;
 
 
 
+
+%% Create widefield movie
+MOVIE = struct('cdata',[],'colormap',[]);
+
+figure('color','w','name',otherInfo{1});
+set(gcf, 'Position', get(0,'Screensize')); % Maximize figure.
+for e = 1:numEpochs
+    subplot(2,numEpochs,e);   hold on;
+    title(behavT.timestamps{e});
+
+    plot(tsteps,squeeze(beta(:,1,:)),'-',tsteps,squeeze(beta(:,2,:)),'--');
+    set(gca,'box','off');
+    l(e) = line([0 0],get(gca,'ylim'));
+    l(e).Color=[0 0 0];
+end
+
+for t = 1:length(tsteps)
+    for e = 1:numEpochs
+
+        subplot(2,numEpochs,e+numEpochs); 
+        img = [svdFrameReconstruct(W.U,beta(:,1,t)) svdFrameReconstruct(W.U,beta(:,2,t))];
+        imagesc([svdFrameReconstruct(W.U,beta(:,1,t)) svdFrameReconstruct(W.U,beta(:,2,t))]);
+        set(gca,'xtick','','ytick','','box','off','xcolor','w','ycolor','w');
+        caxis([-1 1]*1e-6); axis equal;  
+        
+        l(e).XData=[1 1]*tsteps(t);
+%         title(num2str(tsteps(t)));
+    end
+    drawnow;
+    MOVIE(t) = getframe(gcf);
+end
+
+%Write file
+v = VideoWriter(['\\basket.cortexlab.net\home\figures\GLM+Widefield\' otherInfo{1} '.avi']);
+open(v);
+writeVideo(v,MOVIE);
+close(v);
 
 
 
