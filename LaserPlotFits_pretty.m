@@ -51,7 +51,7 @@ for b=1:size(expRefs,1)
     P_noLaser(b,:) = g.parameterFits;
     
     %extract datapoints with errors
-    contrast1D = g.data.contrast_cond(:,2) - g.data.contrast_cond(:,1);
+    contrast1D = g.data.stimulus(:,2) - g.data.stimulus(:,1);
     uniqueC1D_noLaser = unique(contrast1D);
     prop_noLaser=[];
     prop_ci_noLaser=nan(3,2,length(uniqueC1D_noLaser));
@@ -69,7 +69,7 @@ for b=1:size(expRefs,1)
     end
     
     %calculate prediction phat
-    maxC = max(max(g.data.contrast_cond));
+    maxC = max(max(g.data.stimulus));
     evalC = [linspace(maxC,0,100)', zeros(100,1);
         zeros(100,1), linspace(0,maxC,100)'];
     evalC1d = evalC(:,2) - evalC(:,1);
@@ -92,7 +92,7 @@ for b=1:size(expRefs,1)
     P_Laser(b,:) = g.parameterFits;
     
     %extract datapoints with errors
-    contrast1D = g.data.contrast_cond(:,2) - g.data.contrast_cond(:,1);
+    contrast1D = g.data.stimulus(:,2) - g.data.stimulus(:,1);
     uniqueC1D_Laser = unique(contrast1D);
     prop_Laser=[];
     binom_se_Laser=[];
@@ -233,7 +233,7 @@ g.data = getrow(g.data,g.data.laserIdx==0);
 gNoLaser = g.fit;
 
 %extract datapoints with errors
-contrast1D = gNoLaser.data.contrast_cond(:,2) - gNoLaser.data.contrast_cond(:,1);
+contrast1D = gNoLaser.data.stimulus(:,2) - gNoLaser.data.stimulus(:,1);
 uniqueC1D_noLaser = unique(contrast1D);
 prop_noLaser=[];
 prop_ci_noLaser=nan(3,2,length(uniqueC1D_noLaser));
@@ -251,7 +251,7 @@ for c = 1:length(uniqueC1D_noLaser)
 end
 
 %calculate prediction phat
-maxC = max(max(gNoLaser.data.contrast_cond));
+maxC = max(max(gNoLaser.data.stimulus));
 evalC = [linspace(maxC,0,100)', zeros(100,1);
     zeros(100,1), linspace(0,maxC,100)'];
 evalC1d = evalC(:,2) - evalC(:,1);
@@ -276,7 +276,7 @@ g.parameterBounds(:,5:6) = repmat(gNoLaser.parameterFits(5:6),2,1);
 gLaser = g.fit;
     
 %extract datapoints with errors
-contrast1D = gLaser.data.contrast_cond(:,2) - gLaser.data.contrast_cond(:,1);
+contrast1D = gLaser.data.stimulus(:,2) - gLaser.data.stimulus(:,1);
 uniqueC1D_Laser = unique(contrast1D);
 prop_Laser=[];
 binom_se_Laser=[];
