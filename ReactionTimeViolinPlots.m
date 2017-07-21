@@ -9,6 +9,8 @@ expRefs = cellfun(@(s)dat.listExps(s),subjects,'uni',0);
 
 figure;
 for s = 1:length(subjects)
+    numSessions = length(expRefs{s});
+    
     glms = cellfun(@(e)[GLM(e)],expRefs{s},'uni',0);
     
     params = dat.expParams(expRefs{s}); 
@@ -31,7 +33,23 @@ for s = 1:length(subjects)
     glms(cell2mat(performance)<0.6 | isnan(cell2mat(performance)) | taskDimensions==2)=[]; %remove discrim sessions
 
     structs = cellfun(@(g)[g.data],glms,'uni',0); %extract all data
-    data = cell2mat(cellfun(@(st)[st.contrast_cond st.response st.repeatNum st.RT],structs,'uni',0)); %extract all data
+    
+    %Remove structs containing laser data
+%     laserData = [];
+%     for i = 1:length(structs)
+%         try
+%            structs{i}.laser;
+%            laserData(i) = 1;
+%         catch
+%             laserData(i) = 0;
+%         end
+%     end
+%     structs(laserData==1) = [];
+
+    %Save structs
+    save(['\\zserver.cortexlab.net\Lab\Share\PeterZH\RT_FOR_NICK\' subjects{s} '.mat'], 'structs');
+    
+    data = cell2mat(cellfun(@(st)[st.stimulus st.response st.repeatNum st.RT],structs,'uni',0)); %extract all data
     data(data(:,4)>1,:) = []; %exclude repeatNum > 1 data
     c = diff(data(:,[1,2]),[],2); 
 %     tab = sortrows(tabulate(abs(c)),3); cVals = sort(tab(end-2:end,1)); %use the most common abs contrast values
@@ -84,7 +102,7 @@ for s = 1:length(subjects)
             D = structs{b};
             D = getrow(D,D.repeatNum==1);
             
-            c = diff(D.contrast_cond,[],2);
+            c = diff(D.stimulus,[],2);
             cVals = unique(c);
             rts = []; g = []; 
 %             m = nan(length(cVals),1);
