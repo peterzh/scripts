@@ -16,17 +16,22 @@ switch(what)
                 
     case 'pvec2struct'
         v = varargin{1};
-        
         p = struct;
-        p.weights = reshape(v(1:end-2),2,6);
-        p.baselineActivity = v(end-1);
-        p.InactivationScalingFactor = v(end);
+        p.V1i = v(1);
+        p.V1c = v(2);
+        p.S1i = v(3);
+        p.S1c = v(4);
+        p.M2i = v(5);
+        p.M2c = v(6);
+        p.baseline = v(7);
+        p.inact  = v(8);
+        
         varargout{1} = p;
         
     case 'pstruct2vec'
         p = varargin{1};
-        
-        varargout{1} = [p.weights(:); p.baselineActivity; p.InactivationScalingFactor];
+        varargout{1} = [p.V1i p.V1c p.S1i p.S1c p.M2i p.M2c p.baseline p.inact];
+         
 end
         
 end

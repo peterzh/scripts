@@ -5,3 +5,5 @@
 glmnet_input.dat
 *.RData
 *.ini
+neuropixelsDecoding/code/.RDataTmp
+*.pdf

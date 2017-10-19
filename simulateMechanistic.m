@@ -2,17 +2,21 @@
 close all; clear all;
 
 %% Set model configs/parameter
-visContrast = [1 0; 0 1; 1 1; 0 0];
+visContrast = [0.3 0; 0 0.3; 0.3 0.3; 0 0];
 visLabels = {'CL','CR','CL=CR','C=[0 0]'};
 respLabels = {'L','R','NG'};
 r_labels = {'LV1' 'RV1', 'LS1' 'RS1' 'LM2' 'RM2'}';
 
 p = struct;
-p.weights = [-1 1 -1 -1 -1 1;
-             1 -1 -1 -1 1 -1];
-       
-p.baselineActivity = 0;
-p.InactivationScalingFactor = 0.01;
+p.V1i = -1;
+p.V1c = 2;
+p.S1i = -1;
+p.S1c = -1;
+p.M2i = -1;
+p.M2c = 2;
+
+p.baseline = 0.1;
+p.inact = 0.01;
 
 %% Simulate nonlaser and laser data
 pedestals = [0 0.1 0.24 0.54];
@@ -175,12 +179,22 @@ d4=getrow(d3,d3.areaIdx==0);
 
 %% For a given dataset, go through each trial and get prediction of that trial
 
-objective = @(vec) -simulateOptimise('loglik',d1,vec) + 0*sum(vec.^2);
-LB = [-inf(1,13) 0];
-UB = [inf(1,13) 0];
+objective = @(vec) -simulateOptimise('loglik',d3,vec) + 0*sum(vec.^2);
+LB = [-10 0 -10 -10 -10 0 0 0.01];
+UB = [0 10   0   0   0  10 10 0.01];     %10*ones(1,7) 0.01];
+% 
+%      p.V1i = v(1);
+%         p.V1c = v(2);
+%         p.S1i = v(3);
+%         p.S1c = v(4);
+%         p.M2i = v(5);
+%         p.M2c = v(6);
+%         p.baseline = v(7);
+%         p.inact  = v(8);
+        
 
-options = optiset('display','final','solver','NOMAD');
-Opt = opti('fun',objective,'x0',zeros(1,14),'bounds',LB,UB,'options',options);
+options = optiset('display','iter');%,'solver','NLOPT');
+Opt = opti('fun',objective,'x0',zeros(1,8),'bounds',LB,UB,'options',options);
 [vec,~,exitflag] = Opt.solve;
 
 p = simulateOptimise('pvec2struct',vec);
