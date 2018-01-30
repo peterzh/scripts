@@ -98,9 +98,14 @@ for n = 1:length(subjects)
                     RT_estimate(tr,1) = firstMoveTime(tr,1) - behav.stimulusOnTime(tr,1);
                 end
             end
-            
             set(gca,'xcolor','w');
             title('Rotary encoder aligned to stim onset');
+            
+            %Resample the firstMove time for GO trials, for NoGo trials
+            stimOn2firstMove = firstMoveTime - behav.stimulusOnTime;
+            stimOn2firstMove(isnan(stimOn2firstMove)) = [];
+            stimOn2firstMoveNoGo = randsample(stimOn2firstMove,sum(behav.response=='NoGo'));
+            firstMoveTime(behav.response=='NoGo') = behav.stimulusOnTime(behav.response=='NoGo') + stimOn2firstMoveNoGo;
             
             subplot(2,1,2);
             distributionPlot(RT_estimate(behav.response=='Left'),'widthDiv',[2 2],'color',[0.4940 0.1840 0.5560],'histOri','right','showMM',0,'xyOri','flipped');
@@ -116,7 +121,7 @@ for n = 1:length(subjects)
             
 
             behav.firstMoveTime = firstMoveTime;
-            epoches = {'stimulusOnTime','goCueTime','responseTime'};
+            epoches = {'stimulusOnTime','goCueTime','firstMoveTime','responseTime'};
             
             %Fit GLM and plot
             D = struct;

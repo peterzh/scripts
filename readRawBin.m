@@ -1,22 +1,32 @@
 
-binFile = 'E:\raw_data\Cori_start.bin';
-info = dir(binFile);
-sample_rate = 30000;
-numChannels = 385;
-encoding = 'int16';
+%% Create geom.csv file, marking the electrode coords
+ephysDir = 'Z:\Subjects\Cori\2016-12-18\ephys_V1';
+cd(ephysDir);
+mkdir('mountainsort');
 
-totalNumSamples = info.bytes/2;
-samplesPerChannel = totalNumSamples/numChannels;
-outputFile = 'E:\raw_data\header.mda';
+coords = readNPY(fullfile(ephysDir,'sorting','channel_positions.npy'));
+map = readNPY(fullfile(ephysDir,'sorting','channel_map.npy'));
 
+writemda16i(map+1,fullfile(ephysDir,'mountainsort','channelSubset.mda'));
+dlmwrite(fullfile(ephysDir,'mountainsort','geom.csv'),coords,',');
 
-%% Create header file
-fout = fopen(outputFile,'w');
-fwrite(fout,-4,'int32'); %-4 for int16
-fwrite(fout,2,'int32'); %2 for number of bytes in each entry (?)
-fwrite(fout,2,'int32'); %2 for number of dimensions in raw data (num channels by num timepoints)
-fwrite(fout,numChannels,'int32'); 
-fwrite(fout,samplesPerChannel,'int32'); 
-fclose(fout);
+binName = dir(fullfile(ephysDir,'*.ap_CAR.bin'));
 
-% Now use 'cat header.mda Radnitz..... > full.mda' on unix
+mdaCmd = ['mp-run-process pyms.extract_timeseries ',...
+          '--channels_array=channelSubset.mda ',...
+          '--timeseries=', binName.name,' ',...
+          '--timeseries_out=raw.mda ',...
+          '--timeseries_dtype=int16 ',...
+          '--timeseries_num_channels=385\n'];
+sortCmd = 'mlp-run mountainsort3.mlp sort --raw=raw.mda --geom=geom.csv --firings_out=firings.mda --_params=params.json --curate=true\n';
+
+%Write bash file
+f = fopen(fullfile(ephysDir,'mountainsort','runSort'),'w');
+fprintf(f, mdaCmd);
+fprintf(f, sortCmd);
+fclose(f);
+
+%Write params.json file
+f = fopen(fullfile(ephysDir,'mountainsort','params.json'),'w');
+fprintf(f, '{"samplerate":30000, "detect_sign":-1, "adjacency_radius":100}');
+fclose(f);

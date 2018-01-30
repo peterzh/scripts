@@ -7,3 +7,4 @@ glmnet_input.dat
 *.ini
 neuropixelsDecoding/code/.RDataTmp
 *.pdf
+*.fig
