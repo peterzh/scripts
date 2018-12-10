@@ -127,9 +127,10 @@ for n = 1:length(subjects)
             D = struct;
             D.stimulus = behav.stimulus;
             D.response = double(behav.response);
-            g = GLM(D).setModel('C50-subset').fit;
+            D.repeatNum = ones(size(D.response));
+            g = GLM(D).setModel('C^N-subset').fit;
             fig = g.plotFit;
-            set(fig,'Position',[0 0 600 1000]);
+            set(fig,'Position',[0 -4 1315 1000]);
             print(fig,['../figures/behavModel/' eRef],'-dpdf','-bestfit');
             close all;
             

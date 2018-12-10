@@ -1,7 +1,7 @@
 preprocFiles = dir('../preproc/*.mat');
 
-numT = 150;
-epoch_dt = linspace(-1,+1,numT);
+numT = 80;
+epoch_dt = linspace(-0.5,+0.5,numT);
 
 cols = [         0    0.4470    0.7410
     0.8500    0.3250    0.0980
@@ -13,16 +13,19 @@ cols = [         0    0.4470    0.7410
 for sess = 1:length(preprocFiles)
     load( fullfile(preprocFiles(sess).folder, preprocFiles(sess).name) );
     
+    epoches = {'stimulusOnTime', 'firstMoveTime'};
+    
     %Fit GLM to get parameters
     D = struct;
     D.stimulus = behav.stimulus;
     D.response = double(behav.response);
-    g = GLM(D).setModel('C50-subset').fit;
+    D.repeatNum = ones(size(D.response));
+    g = GLM(D).setModel('C^N-subset').fit;
     D.offset_ZL = g.ZL(g.parameterFits, g.Zinput(g.data));
     D.offset_ZR = g.ZR(g.parameterFits, g.Zinput(g.data));
     
     %Cross-validate C50-model to get baseline log likelihood
-    g = GLM(D).setModel('C50-subset').fitCV(10);
+    g = GLM(D).setModel('C^N-subset').fitCV(10);
     pL = g.p_hat(:,1);    pR = g.p_hat(:,2);    pNG = g.p_hat(:,3);
     bpt_baseline = struct;
     likelihood_Full = pL.*(g.data.response==1) + pR.*(g.data.response==2) + pNG.*(g.data.response==3);

@@ -1,16 +1,19 @@
 function cacheAllSessions()
 
-subjects = {'Nyx','Beadle','Bovet','Vin','Keynes','Heinz','Spemann','Whipple','Morgan','Murphy','Chomsky'};
+% subjects = {'Nyx','Beadle','Bovet','Vin','Keynes','Heinz','Spemann','Whipple','Morgan','Murphy','Chomsky'};
+subjects = {'Spemann','Whipple','Morgan','Murphy','Chomsky'};
 
 baseDirs = {'\\zserver.cortexlab.net\Data2\Subjects';
     '\\zserver.cortexlab.net\Data\expInfo';
-    '\\zserver.cortexlab.net\Data\Subjects'};
+    '\\zserver.cortexlab.net\Data\Subjects';
+    '\\zubjects.cortexlab.net\Subjects'};
 
 bigTable = table;
 for subj = 1:length(subjects)
+    insert(d.Mouse, {subjects{subj},'0000-00-00', 'M', '??'});
     
     expRefs = {};
-    for i = 1:3
+    for i = 1:4
         subjDir = fullfile(baseDirs{i},subjects{subj});
         blockFiles = dirPlus(subjDir,'filefilter','\_Block.mat$','struct',true);
         if ~isempty(blockFiles)
@@ -27,6 +30,12 @@ for subj = 1:length(subjects)
         [D,meta] = loadData( expRefs{sess} );
         
         if ~isempty(D.response) & length(D.response)>10
+            
+            [subject, date, seq] = dat.parseExpRef(expRefs{sess});
+            
+            %Add to DJ
+            insert(d.Session, {subject,datestr(date,29),seq});
+            
             %Categorise this session
             t = table;
             t.mouse = subjects(subj);

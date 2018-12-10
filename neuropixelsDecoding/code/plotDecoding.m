@@ -2,14 +2,15 @@ preprocFiles = dir('../preproc/*.mat');
 decodingFiles = dir('../decoding/*.mat');
 
 ROIs = {'Primary visual area','Secondary motor area'}; %Get averages for these areas only
-relbpt.full = nan(150, length(ROIs), 4, length(preprocFiles));
-relbpt.gonogo = nan(150, length(ROIs), 4, length(preprocFiles));
-relbpt.lr = nan(150, length(ROIs), 4, length(preprocFiles));
+relbpt.full = nan(80, length(ROIs), 4, length(preprocFiles));
+relbpt.gonogo = nan(80, length(ROIs), 4, length(preprocFiles));
+relbpt.lr = nan(80, length(ROIs), 4, length(preprocFiles));
                 
 for sess = 1:length(preprocFiles)
     load( fullfile(decodingFiles(sess).folder,decodingFiles(sess).name) );
     load( fullfile(preprocFiles(sess).folder,preprocFiles(sess).name) );
-    
+    epoches = {'stimulusOnTime', 'firstMoveTime'};
+
     
     f = figure('color','w','name',decodingFiles(sess).name(1:end-4));
     %
@@ -156,29 +157,54 @@ legend(ROIs);
 legend boxoff; ylim([0 0.3]);
 
 %% Plot GO v NOGO decoding for all regions 
+
+decodingFiles = dir('../decoding/*.mat');
+
+FULL=[];
+GNG=[];
+LR=[];
 regions = {};
-ball = [];
-for sess = 1:length(preprocFiles)
+for sess = 1:length(decodingFiles)
     load( fullfile(decodingFiles(sess).folder,decodingFiles(sess).name) );
     
-    b = bpt.GOvNOGO(:,:,strcmp(epoches,'firstMoveTime')) - bpt_baseline.GOvNOGO;
-    ball = [ball; b'];
+    b = bpt.full(:,:,strcmp(epoches,'stimulusOnTime')) - bpt_baseline.full;
+    FULL = [FULL; b'];
+    
+    b = bpt.GOvNOGO(:,:,strcmp(epoches,'stimulusOnTime')) - bpt_baseline.GOvNOGO;
+    GNG = [GNG; b'];
+    
+    b = bpt.LvR(:,:,strcmp(epoches,'stimulusOnTime')) - bpt_baseline.LvR;
+    LR = [LR; b'];
+    
     regions = [regions; brainRegions];
-%     subplot(length(preprocFiles),1,sess);
-%     imagesc(epoch_dt,[],b');
 end
 
-%Normalise each row
-ball = bsxfun(@rdivide,ball,max(ball,[],2));
+%Sort by region name
+[~,idx]=sort(regions);
 
-[sortRegions,idx]=sort(regions);
+%Sort by size of decoding
+[~,idx]=sort(max(FULL,[],2),'descend');
+
+%Sort by onset time
+[~,thres_idx]=max(FULL>0.1,[],2);
+[~,idx]=sort(thres_idx,'descend');
 
 figure('color','w');
-imagesc(epoch_dt,[],ball(idx,:));
-set(gca,'YTickLabel',sortRegions,'ytick',1:length(sortRegions));
-xlabel('Time relative to first movement');
-hold on;
-lx=line([0 0],get(gca,'ylim')); caxis([0 1]);
-lx.LineWidth=1; lx.LineStyle='--'; lx.Color=[0 0 0]
+ha = tight_subplot(1,3,0.02,0.05,[0.15 0.01]); 
+for i = 1:3; hold(ha(i),'on'); end;
 
+imagesc(ha(1),epoch_dt,[],FULL(idx,:));
+line(ha(1),[0 0],get(ha(1),'ylim'),'LineWidth',1','Color',[0 0 0],'LineStyle','--');
+set(ha(1),'YTickLabel',regions(idx),'ytick',1:length(idx));
+xlabel(ha(1),'Time relative to first movement');
 
+imagesc(ha(2),epoch_dt,[],GNG(idx,:));
+line(ha(2),[0 0],get(ha(2),'ylim'),'LineWidth',1','Color',[0 0 0],'LineStyle','--'); 
+
+imagesc(ha(3),epoch_dt,[],LR(idx,:));
+line(ha(3),[0 0],get(ha(3),'ylim'),'LineWidth',1','Color',[0 0 0],'LineStyle','--');
+set(gca,'YTickLabel','');
+set(ha,'xlim',[-1 1]*0.5,'ylim',[0 length(regions)+1],'clim',[0 0.15], 'xticklabelmode','auto');
+title(ha(1),'Full decoder');
+title(ha(2),'Go v NoGo decoder');
+title(ha(3),'Left v Right decoder');
